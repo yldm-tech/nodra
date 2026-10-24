@@ -2,6 +2,8 @@ package nodra
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -42,7 +44,14 @@ func TestAESGCMCodecDetectsTamperingAndMissingKey(t *testing.T) {
 	codec := AESGCMCodec[int]{Inner: JSONCodec[int]{}, Keys: keys}
 	data, err := codec.Encode(7)
 	requireNoError(t, err)
-	data[len(data)-3] ^= 1
+	var envelope encryptedEnvelope
+	requireNoError(t, json.Unmarshal(data, &envelope))
+	ciphertext, err := base64.RawStdEncoding.DecodeString(envelope.Ciphertext)
+	requireNoError(t, err)
+	ciphertext[len(ciphertext)-1] ^= 1
+	envelope.Ciphertext = base64.RawStdEncoding.EncodeToString(ciphertext)
+	data, err = json.Marshal(envelope)
+	requireNoError(t, err)
 	if _, err := codec.Decode(data); err == nil {
 		t.Fatal("tampering accepted")
 	}
