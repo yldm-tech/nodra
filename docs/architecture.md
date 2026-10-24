@@ -52,6 +52,10 @@ once at the outermost boundary. Concurrent writers may join an open batch; use
 
 `Atomic2` extends this boundary across two stores with different value types. It orders store locks by address, prepares both candidates, commits both versions, and releases the transaction gate before user notifications. A callback error or panic leaves both values and versions unchanged; successful mutation events share a transaction ID.
 
+`AtomicGroup` extends the same boundary to any number of stores through typed `AtomicUpdate` operations. Every candidate, including its final clone, is prepared before the first value is assigned. Operations are locked by stable store address and duplicate stores are rejected. A failed callback or clone leaves every store unchanged; successful notifications run after all assignments and carry one transaction ID. The callbacks must mutate only their candidate pointers and must not call Store methods.
+
+The release and deprecation rules for the v0.x to v1 transition are recorded in [Compatibility policy](compatibility.md). They define which exported APIs and documented semantics are intended to stabilize, while leaving internal lock layout and DevTools presentation outside the public contract.
+
 ## Notifications
 
 Listeners run synchronously on the writer goroutine after the store lock is

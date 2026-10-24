@@ -68,6 +68,18 @@ stop := nodra.Invalidate(label, window)
 
 Nest Combine calls for more inputs. Each source version advances independently: combinations converge to the latest observed inputs but are not cross-Store transactions. A diamond graph may emit an intermediate combination before both branches catch up. Keep values that require atomic updates in one Store. Constructors catch registration gaps; obsolete computations do not overwrite newer accepted results. Projectors and comparators must be pure and concurrency-safe, and derived reference values remain read-only. `DeriveProjection` can start a derived chain without full-source subscription clones. Closing a derived value detaches its inputs and freezes its last value; downstream owners still close their own derived values.
 
+For a transaction spanning more than two stores, prepare typed updates with `AtomicUpdate` and commit them with `AtomicGroup`:
+
+```go
+err := nodra.AtomicGroup(
+    nodra.AtomicUpdate(user, func(value *User) error { value.Active = true; return nil }),
+    nodra.AtomicUpdate(permissions, func(value *Permissions) error { value.Edit = true; return nil }),
+    nodra.AtomicUpdate(settings, func(value *Settings) error { value.Revision++; return nil }),
+)
+```
+
+All candidates are prepared before any store changes, and the group rolls back on an error or panic. Notifications carry one transaction ID and run after every participating store is visible. Do not call Store methods from an `AtomicUpdate` callback; use its candidate pointer.
+
 ## Immediate field editing
 
 `BindField` creates a small immediate binding; its `Edit` callback renders against a local value outside Store locks and commits only when the control reports a change:
@@ -242,6 +254,7 @@ tasks.Update(func(value *[]Task) {
 - Action lifecycle hooks: before, after, and error
 - Nested `Batch` notification groups that publish one final snapshot
 - `Transaction` for one serialized, fallible mutation
+- `Atomic2`, `AtomicUpdate`, and `AtomicGroup` for cross-store visibility boundaries
 - `Track` / `TrackWith` history with bounded undo/redo, recording filters and cross-frame edit groups
 - `Persistence[T]` with pluggable storage and codec interfaces
 - Ready-to-use `FileStorage` and `JSONCodec[T]` with atomic file replacement
