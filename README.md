@@ -152,6 +152,8 @@ LatestWins replaces work only for the same key; different keys are independent. 
 
 Set `ActionOptions.Debounce` to delay `LatestWins` work until a quiet interval after acceptance for its key. Replacing an input cancels its timer and reports `superseded` without executing work. Different keys have independent deadlines. Waiting for debounce does not occupy a worker slot, and eligible keys can start while another key is still waiting. Queue limits include live debounced inputs; cancellation and Close drain waiting tasks. A positive Debounce with QueueAll returns `ErrInvalidAction`, because QueueAll retains every input. Zero preserves existing immediate scheduling. The workbench search uses a 150 ms debounce.
 
+Retries are opt-in through `ActionOptions.Retry` and require `Idempotent: true`. `MaxAttempts` includes the first work call; exponential backoff is capped by `MaxBackoff`. Only the work callback is retried; the state apply callback runs once after a successful result. `TaskMetrics.Attempts` reports one run's attempts, while `action.Metrics()` aggregates accepted/completed/succeeded/failed/canceled runs, retries, queue peak and duration totals.
+
 `Task.Status()` exposes that task's key, queued/running/terminal phase, progress and diagnostic error. The status Store closes after terminal status. The action-level Status describes the most recently accepted run, which is not a count of all active work. Use `ActiveTasks()` or `TaskSnapshot()` on the source for current work. Do not wait for another queued task synchronously from work, hooks or subscribers of the same bounded action; that can exhaust its own work slots. Progress may be reported concurrently during work; stop reporting when work returns.
 
 `SubscribeActionTrace` observes async acceptance, start, progress and terminal outcome. Action ID links traces to mutation and completion events; RunID is local to one action. TaskVersion orders one task's status while Revision orders source trace publication; callbacks can still overlap. Committed/Version identify the accepted publication even if notifications later fail. A Store Batch coalesces publication across writers, so its final mutation has no single ActionID and individual batched actions do not claim a published commit version. Duration includes queue waiting time. Terminal task entries are released from the source's active map.
@@ -246,6 +248,7 @@ tasks.Update(func(value *[]Task) {
 - `VersionedJSONCodec[T]` with sequential schema migrations and explicit legacy JSON support
 - `AutoSaveWithErrors` for observable persistence failures
 - `AutoSaveAsync` for debounced, coalesced writes with `Flush`, `Close` and an error stream
+- `AESGCMCodec` and key-provider interfaces for authenticated encrypted persistence with key rotation
 - Context-bound, bounded `Watch` streams that close with the store
 - `Invalidate` and `InvalidateSelector` for window-bound redraw subscriptions with automatic cleanup
 - Optional DevTools with a local browser inspector, mutation/action timeline,
@@ -326,6 +329,8 @@ successful migration is written by a subsequent `Save` or autosave.
 
 Enable `FileStorage{Path: path, Backup: true}` to write an independently replaced `path + ".bak"` copy after successful primary replacement. Backup I/O errors are returned; the primary may already have been saved when a backup fails. The two files are not one transaction. Keep one Persistence writer per destination, and reserve its `.bak` path for this backup. Applications must surface save errors rather than assume both files were updated.
 
+Set `FileStorage.Durable: true` to sync the containing directory after each rename. This adds filesystem latency but closes the rename-directory-entry crash window on platforms/filesystems that support directory fsync. Use `AESGCMCodec` around an inner codec when state must be encrypted; the envelope stores an algorithm, key ID, nonce and authenticated ciphertext, never plaintext. Add a new key to a `KeyProvider`, switch `Current`, then save to rotate. Historical key IDs remain readable until removed by the application. Nodra does not manage keychains or secret storage.
+
 After a failed startup Load, stop and present that error before starting autosave. `persistence.LoadBackup(ctx)` explicitly validates and loads the backup into memory without rewriting either file. A later Save intentionally persists the recovered/current state. No silent fallback discards a corrupt original. Stores without a backup-capable backend return `ErrNoBackup`. Try `go run ./examples/persistent -file /path/to/state.json -recover-backup` to inspect recovery without modifying the files.
 
 For multiple cooperating instances, explicitly enable content-conflict detection:
@@ -342,6 +347,8 @@ if err := persistence.Save(ctx); errors.Is(err, nodra.ErrFileConflict) {
 The constructor observes current primary bytes (or absence) as the baseline without loading Store state. `CheckedFileStorage` checks a SHA-256 fingerprint under an OS advisory lock before replacing the file. Independent instances/processes using this backend coordinate through `path + ".lock"`; reserve that sidecar and never remove it while instances may be active. A `FileConflictError` carries expected/actual fingerprints without file contents. Rejected saves preserve primary and backup bytes, and retries keep failing until the application explicitly loads/reconciles or chooses another destination. `Load` acknowledges current primary bytes, including absence while returning `os.ErrNotExist`; decode/validation errors must still stop startup autosave. `LoadBackup` does not acknowledge changed primary content. A backup failure after primary replacement acknowledges that primary so retry can complete the backup without a false conflict. Async writers surface conflicts through Errors/Flush/Close and remain pending.
 
 All writers must opt in for coordinated replacement. Plain FileStorage and external editors do not honor the lock: changes completed before the check are detected, but an uncooperative concurrent writer can race the check and replacement. This is not an atomic compare-and-swap against arbitrary filesystem writers. Use regular local files and one canonical destination; primary symlinks/nonregular files are rejected, parent directory aliases are canonicalized, and hard-link aliases/network filesystem locking are outside the contract. Equal-content replacements and changes reverted before the next check do not count as content conflicts. The default FileStorage remains unchanged.
+
+`Atomic2` provides a visibility boundary for two different stores. Both values commit or both roll back; notifications carry a shared transaction ID after commit. Readers block while the transaction callback runs, so derived UI can avoid observing an intermediate pair.
 
 ## Write-behind persistence
 

@@ -34,6 +34,7 @@ type ActionTrace struct {
 
 // TaskMetrics separates elapsed debounce, eligible queue wait, user work and commit attempt. Commit includes Store lock wait, cloning, apply and synchronous mutation notifications, even on failure. Work excludes Before hooks. These phases exclude other hooks/status callbacks and need not sum to Duration. QueueDepth counts live waiting tasks (including debounce); ActiveWorkers includes canceled work until it returns. Counts are sampled per event for this AsyncAction, not globally.
 type TaskMetrics struct {
+	Attempts      int           `json:"attempts"`
 	Debounce      time.Duration `json:"debounce"`
 	Queue         time.Duration `json:"queue"`
 	Work          time.Duration `json:"work"`

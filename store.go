@@ -4,11 +4,17 @@ package nodra
 import (
 	"context"
 	"errors"
+	"reflect"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var ErrClosed = errors.New("nodra: store is closed")
+
+var storeTransactionMu sync.RWMutex
+var nextTransactionID atomic.Uint64
 
 type Snapshot[T any] struct {
 	Value   T
@@ -73,13 +79,21 @@ func (s *Store[T]) copy(value T) T {
 	return value
 }
 func (s *Store[T]) Snapshot() Snapshot[T] {
+	storeTransactionMu.RLock()
+	defer storeTransactionMu.RUnlock()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return Snapshot[T]{s.copy(s.value), s.version}
 }
-func (s *Store[T]) Get() T          { return s.Snapshot().Value }
-func (s *Store[T]) State() T        { return s.Get() }
-func (s *Store[T]) Version() uint64 { s.mu.RLock(); defer s.mu.RUnlock(); return s.version }
+func (s *Store[T]) Get() T   { return s.Snapshot().Value }
+func (s *Store[T]) State() T { return s.Get() }
+func (s *Store[T]) Version() uint64 {
+	storeTransactionMu.RLock()
+	defer storeTransactionMu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.version
+}
 
 func (s *Store[T]) Set(value T) error {
 	return s.updateNamed("", MutationDirect, func(v *T) error { *v = value; return nil })
@@ -115,6 +129,13 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 	var mutations []func(Mutation[T])
 	published := false
 	var err error
+	transactionHeld := true
+	storeTransactionMu.RLock()
+	defer func() {
+		if transactionHeld {
+			storeTransactionMu.RUnlock()
+		}
+	}()
 	s.mu.Lock()
 	func() {
 		// Release the lock on update or clone panics without publishing a
@@ -147,6 +168,8 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 		snapshot, listeners, mutations = s.publishLocked(before, kind, name)
 		published = true
 	}()
+	storeTransactionMu.RUnlock()
+	transactionHeld = false
 	if published {
 		s.notify(listeners, snapshot)
 		var id uint64
@@ -156,6 +179,63 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 		s.notifyMutation(mutations, Mutation[T]{ActionID: id, Type: kind, Name: name, Previous: before, Value: snapshot.Value, Version: snapshot.Version, At: time.Now()})
 	}
 	return err
+}
+
+// Atomic2 commits two different stores as one visibility boundary. All source values are prepared while both store locks are held; a callback error or panic leaves both stores unchanged. Readers and ordinary writers wait until both values are committed. Notifications run after the boundary is released, so listeners may safely reenter either store. The callback must not call Store methods directly; use the provided pointers.
+func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error) (err error) {
+	if first == nil || second == nil || any(first) == any(second) || fn == nil {
+		return errors.New("nodra: invalid atomic transaction")
+	}
+	storeTransactionMu.Lock()
+	transactionHeld := true
+	locks := []struct {
+		ptr    uintptr
+		lock   func()
+		unlock func()
+	}{
+		{reflect.ValueOf(first).Pointer(), first.mu.Lock, first.mu.Unlock},
+		{reflect.ValueOf(second).Pointer(), second.mu.Lock, second.mu.Unlock},
+	}
+	sort.Slice(locks, func(a, b int) bool { return locks[a].ptr < locks[b].ptr })
+	locks[0].lock()
+	locks[1].lock()
+	locked := true
+	defer func() {
+		if locked {
+			locks[1].unlock()
+			locks[0].unlock()
+		}
+		if transactionHeld {
+			storeTransactionMu.Unlock()
+		}
+		if recovered := recover(); recovered != nil {
+			err = &PanicError{Value: recovered}
+		}
+	}()
+	firstBefore, secondBefore := first.value, second.value
+	if first.closed || second.closed {
+		return ErrClosed
+	}
+	firstNext, secondNext := first.copy(firstBefore), second.copy(secondBefore)
+	if err = fn(&firstNext, &secondNext); err != nil {
+		return err
+	}
+	first.value, second.value = first.copy(firstNext), second.copy(secondNext)
+	first.version++
+	second.version++
+	transactionID := nextTransactionID.Add(1)
+	firstSnapshot, firstListeners, firstMutations := first.publishLocked(firstBefore, MutationTransaction, "atomic")
+	secondSnapshot, secondListeners, secondMutations := second.publishLocked(secondBefore, MutationTransaction, "atomic")
+	locks[1].unlock()
+	locks[0].unlock()
+	storeTransactionMu.Unlock()
+	transactionHeld = false
+	locked = false
+	first.notify(firstListeners, firstSnapshot)
+	second.notify(secondListeners, secondSnapshot)
+	first.notifyMutationWithTransaction(firstMutations, Mutation[A]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: firstBefore, Value: firstSnapshot.Value, Version: firstSnapshot.Version, At: time.Now()})
+	second.notifyMutationWithTransaction(secondMutations, Mutation[B]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: secondBefore, Value: secondSnapshot.Value, Version: secondSnapshot.Version, At: time.Now()})
+	return nil
 }
 
 func (s *Store[T]) publishLocked(before T, kind MutationType, name string) (Snapshot[T], []listener[T], []func(Mutation[T])) {
@@ -325,6 +405,9 @@ func (s *Store[T]) notify(listeners []listener[T], snapshot Snapshot[T]) {
 	}
 }
 func (s *Store[T]) notifyMutation(listeners []func(Mutation[T]), mutation Mutation[T]) {
+	s.notifyMutationWithTransaction(listeners, mutation)
+}
+func (s *Store[T]) notifyMutationWithTransaction(listeners []func(Mutation[T]), mutation Mutation[T]) {
 	for _, fn := range listeners {
 		event := mutation
 		event.Previous, event.Value = s.copy(mutation.Previous), s.copy(mutation.Value)

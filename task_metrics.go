@@ -26,6 +26,7 @@ func (a *AsyncAction[T, I, R]) metrics(task *Task) TaskMetrics {
 		now = time.Now()
 	}
 	metrics := TaskMetrics{
+		Attempts:      task.attempt,
 		Debounce:      elapsedUntil(task.event.Started, task.readyAt, now),
 		Queue:         elapsedUntil(task.readyAt, task.acquiredAt, now),
 		Work:          elapsedUntil(task.workStarted, task.workFinished, now),

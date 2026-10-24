@@ -50,6 +50,8 @@ once at the outermost boundary. Concurrent writers may join an open batch; use
 `Transaction` for one serialized mutation. A closed store rejects future writes with
 `ErrClosed`, removes subscribers and closes active `Watch` streams.
 
+`Atomic2` extends this boundary across two stores with different value types. It orders store locks by address, prepares both candidates, commits both versions, and releases the transaction gate before user notifications. A callback error or panic leaves both values and versions unchanged; successful mutation events share a transaction ID.
+
 ## Notifications
 
 Listeners run synchronously on the writer goroutine after the store lock is
@@ -211,6 +213,10 @@ Scope closes observations before LIFO drains, with context cancellation at the s
 
 Each action owns a FIFO of accepted tasks, a running-work count and latest ownership per key. Canceling work does not free its slot until that run exits. Queued tasks wait on change/cancellation channels rather than polling. Queue admission excludes canceled and replaceable queued tasks; rejection leaves existing contexts intact. QueueAll never applies latest-owner rejection. With one worker, acceptance order also determines commit order; concurrent work can complete in any order.
 
+Retry is opt-in and requires an explicit idempotent declaration. `MaxAttempts` includes the first work call; exponential backoff is bounded by `MaxBackoff`. A retry never repeats the apply callback, and cancellation stops the delay without another attempt. Per-run attempt count is exposed through `TaskMetrics`; `AsyncAction.Metrics` aggregates terminal outcomes without retaining completed task objects.
+
+Retry is opt-in and requires an explicit idempotent declaration. `MaxAttempts` includes the first work call; exponential backoff is bounded by `MaxBackoff`. A retry never repeats the apply callback, and cancellation stops the delay without another attempt. Per-run attempt count is exposed through `TaskMetrics`; `AsyncAction.Metrics` aggregates terminal outcomes without retaining completed task objects.
+
 Task status revisions prevent overlapping progress notifications from replacing a newer global status. Preparing a source trace is ordered with that task's status lock; trace callbacks run after every lock is released. This prevents delayed progress from resurrecting a terminal source entry. Source active-task snapshots include a trace revision for attach/resume reconciliation. Terminal entries leave that map, while each Task owns its closed status snapshot. Action ID is allocated by the source; RunID belongs to one AsyncAction. Published mutation and completion metadata share the exact accepted commit version. Batches intentionally coalesce action identity at their later publication boundary.
 
 ## Recovery boundary
@@ -218,6 +224,8 @@ Task status revisions prevent overlapping progress notifications from replacing 
 Persistence validation happens on isolated snapshots/decoded values before replacement, never by mutating Store-owned state. File backup is a second atomic file replacement after the primary; backup failure can therefore report a partially successful Save. Loading a backup is a read plus validated memory replacement and deliberately does not repair or delete the primary. Startup must decide how to handle a failed primary load before enabling autosave. The library does not silently choose a recovery policy. Plain FileStorage does not coordinate independent writers.
 
 `FileStorage.WithConflictDetection` returns a pointer backend with a baseline SHA-256 content fingerprint and a cancelable per-instance gate. It canonicalizes the parent directory and uses `gofrs/flock` on a persistent `.lock` sidecar for cross-process compare-and-replace serialization. Lock handles close after every operation; the sidecar must remain while instances are active so all writers lock the same inode. A conflict returns expected/actual fingerprints without replacing primary or backup. Load explicitly accepts the current primary baseline, while LoadBackup leaves it unchanged. The primary-replaced callback advances this instance's baseline before attempting backup, preserving retry after a partial Save. These guarantees require cooperating writers at the same canonical regular local file. Noncooperating concurrent editors can race the check/rename, and content hashes do not detect equal-content or reverted changes. Symlink/nonregular primary files are rejected; hard-link aliases and network locks are outside the contract.
+
+`FileStorage.Durable` additionally synchronizes the parent directory after rename. `AESGCMCodec` wraps any inner codec with authenticated AES-GCM encryption, stores only a key ID/nonce/ciphertext envelope, and supports rotation through a `KeyProvider`; keychain access remains application-owned.
 
 ## Value composition, history budgets and progress control
 

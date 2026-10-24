@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strings"
@@ -66,6 +67,7 @@ type Store struct {
 // Event sequences describe capture order, not an ordering guarantee between
 // concurrent writers. Version and At preserve the source mutation's metadata.
 type Event struct {
+	TransactionID uint64             `json:"transactionId,omitempty"`
 	Metrics       nodra.TaskMetrics  `json:"metrics"`
 	RunID         uint64             `json:"runId,omitempty"`
 	Key           string             `json:"key,omitempty"`
@@ -87,6 +89,17 @@ type Event struct {
 	Previous      json.RawMessage    `json:"previous,omitempty"`
 	State         json.RawMessage    `json:"state,omitempty"`
 	Error         string             `json:"error,omitempty"`
+	Data          json.RawMessage    `json:"data,omitempty"`
+}
+
+// CustomEvent is application-owned diagnostic data. Data must be valid JSON and is retained under the normal history budget. Name, Key and Error pass through RedactMetadata before retention.
+type CustomEvent struct {
+	Kind  string
+	Name  string
+	Key   string
+	Error string
+	Data  json.RawMessage
+	At    time.Time
 }
 
 type Snapshot struct {
@@ -141,6 +154,7 @@ type Inspector struct {
 	token        string
 	server       *http.Server
 	done         chan struct{}
+	search       map[string]map[uint64]struct{}
 }
 
 func New(options Options) *Inspector {
@@ -159,7 +173,7 @@ func New(options Options) *Inspector {
 	if options.MaxHistoryBytes < 1 {
 		options.MaxHistoryBytes = 16 << 20
 	}
-	return &Inspector{options: options, stores: make(map[string]*attached), token: rand.Text()}
+	return &Inspector{options: options, stores: make(map[string]*attached), token: rand.Text(), search: make(map[string]map[uint64]struct{})}
 }
 
 // Attach observes one typed store. IDs are explicit and unique, so unnamed and
@@ -215,7 +229,7 @@ func Attach[T any](i *Inspector, id string, source nodra.Reader[T]) (func(), err
 		}
 		state, stateErr := i.encode(id, m.Value)
 		previous, previousErr := i.encode(id, m.Previous)
-		i.record(node, Event{StoreID: id, Kind: "mutation", Mutation: m.Type, Name: m.Name,
+		i.record(node, Event{StoreID: id, Kind: "mutation", Mutation: m.Type, TransactionID: m.TransactionID, Name: m.Name,
 			ActionID: m.ActionID, Version: m.Version, At: m.At, Previous: previous, State: state, Error: joinMessages(stateErr, previousErr)}, stateErr, true)
 	})
 	stopAction := source.SubscribeActions(func(a nodra.ActionEvent) {
@@ -316,6 +330,7 @@ func (i *Inspector) appendLocked(event Event) {
 		return
 	}
 	for len(i.events) > 0 && (len(i.events) >= i.options.Limit || i.historyBytes+size > i.options.MaxHistoryBytes) {
+		i.removeSearchLocked(i.events[0])
 		i.historyBytes -= eventBytes(i.events[0])
 		i.events[0] = Event{} // Release evicted buffers, including sliced capacity.
 		i.events = i.events[1:]
@@ -323,6 +338,82 @@ func (i *Inspector) appendLocked(event Event) {
 	}
 	i.events = append(i.events, event)
 	i.historyBytes += size
+	for _, token := range []string{event.Kind, event.Name, event.Key, event.Error} {
+		for _, word := range strings.Fields(strings.ToLower(token)) {
+			if i.search[word] == nil {
+				i.search[word] = make(map[uint64]struct{})
+			}
+			i.search[word][event.Sequence] = struct{}{}
+		}
+	}
+}
+
+func (i *Inspector) removeSearchLocked(event Event) {
+	for _, token := range []string{event.Kind, event.Name, event.Key, event.Error} {
+		for _, word := range strings.Fields(strings.ToLower(token)) {
+			if entries := i.search[word]; entries != nil {
+				delete(entries, event.Sequence)
+				if len(entries) == 0 {
+					delete(i.search, word)
+				}
+			}
+		}
+	}
+}
+
+// Record records an application-defined event on an attached store. It never mutates the Store and returns ErrNotFound for a detached generation. Event data is copied and must be valid JSON.
+func (i *Inspector) Record(id string, event CustomEvent) error {
+	if event.Kind == "" || !json.Valid(event.Data) {
+		return ErrInvalid
+	}
+	i.mu.Lock()
+	node := i.stores[id]
+	closed := i.closed
+	i.mu.Unlock()
+	if closed {
+		return ErrClosed
+	}
+	if node == nil {
+		return ErrNotFound
+	}
+	retained := i.redactEvent(Event{StoreID: id, Generation: node.view.Generation, Kind: event.Kind, Name: event.Name, Key: event.Key, Error: event.Error, Data: bytes.Clone(event.Data), At: event.At})
+	if retained.At.IsZero() {
+		retained.At = time.Now().UTC()
+	}
+	i.record(node, retained, "", false)
+	return nil
+}
+
+// Search returns retained event sequence numbers matching all whitespace-separated terms. It is an index over retained events, so evicted sequences are never returned.
+func (i *Inspector) Search(query string, limit int) []uint64 {
+	terms := strings.Fields(strings.ToLower(query))
+	if len(terms) == 0 {
+		return nil
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	var matches map[uint64]struct{}
+	for _, term := range terms {
+		current := i.search[term]
+		if matches == nil {
+			matches = maps.Clone(current)
+		} else {
+			for sequence := range matches {
+				if _, ok := current[sequence]; !ok {
+					delete(matches, sequence)
+				}
+			}
+		}
+	}
+	result := make([]uint64, 0, len(matches))
+	for sequence := range matches {
+		result = append(result, sequence)
+	}
+	sort.Slice(result, func(a, b int) bool { return result[a] < result[b] })
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result
 }
 
 func eventBytes(event Event) int {
@@ -389,6 +480,7 @@ func (i *Inspector) Clear() {
 		node.view.TasksDropped = 0
 	}
 	i.historyBytes, i.dropped = 0, 0
+	i.search = make(map[string]map[uint64]struct{})
 	i.revision++
 	i.cleared = i.revision
 	i.mu.Unlock()
