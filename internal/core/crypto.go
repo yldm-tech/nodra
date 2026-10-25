@@ -108,6 +108,9 @@ func (c AESGCMCodec[T]) Encode(value T) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if keyID == "" {
+		return nil, ErrInvalidKey
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidKey, err)
