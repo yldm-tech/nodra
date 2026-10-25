@@ -24,3 +24,43 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
+
+  # Publishes main to https://nodra.yldm.ai. Needs the repository secret CLOUDFLARE_API_TOKEN (the "Edit Cloudflare Workers" token template, limited to this account and the yldm.ai zone); without it the job only warns, so CI stays green until the secret exists.
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: site-deploy
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: site
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e2b27aea5f599efdbe0a7016a2580d05
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check credentials
+        id: creds
+        working-directory: .
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping the site deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.creds.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.creds.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - if: steps.creds.outputs.ready == 'true'
+        name: Install pnpm
+        run: npm install -g pnpm@12.15.0
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm run deploy
