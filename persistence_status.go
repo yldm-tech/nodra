@@ -14,7 +14,7 @@ type PersistenceState struct {
 	Error            string
 }
 
-// Status exposes a read-only observable suitable for MyGo invalidation and DevTools. Subscribers run synchronously outside writer locks; do not Flush or Close this writer from its own subscribers. Subscriber panics cannot stop persistence or shutdown.
+// Status exposes a read-only observable suitable for MyGo invalidation and DevTools. Status publications are serialized while remaining outside writer locks, so subscriber completion order follows status revisions. Do not Flush or Close this writer from its own subscribers. Subscriber panics cannot stop persistence or shutdown.
 func (a *AsyncPersistence[T]) Status() ReadOnly[PersistenceState] { return a.state.ReadOnly() }
 
 var errPersistenceStatusUnchanged = errors.New("nodra: persistence status unchanged")
@@ -26,6 +26,8 @@ func (a *AsyncPersistence[T]) publishStatus() {
 		state.Error = a.lastErr.Error()
 	}
 	a.mu.Unlock()
+	a.statusMu.Lock()
+	defer a.statusMu.Unlock()
 	_ = taskBoundary(func() error {
 		return a.state.UpdateErr(func(current *PersistenceState) error {
 			if current.Revision >= state.Revision {

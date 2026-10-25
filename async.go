@@ -39,6 +39,7 @@ type AsyncPersistence[T any] struct {
 	closeDone   chan struct{}
 	closeErr    error
 	state       *Store[PersistenceState]
+	statusMu    sync.Mutex
 	revision    uint64
 	saving      bool
 }
