@@ -77,3 +77,64 @@ func TestBackupSaveFailureAndMissingBackup(t *testing.T) {
 		t.Fatalf("disabled backup: %v", err)
 	}
 }
+
+func TestPersistenceLoadWithRecoveryFallsBackExplicitlyAndPreservesCauses(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	storage := FileStorage{Path: path, Backup: true}
+	store := New(7)
+	p := NewPersistence(store, storage, JSONCodec[int]{})
+	requireNoError(t, p.Save(ctx))
+	requireNoError(t, os.WriteFile(path, []byte(`{"broken":`), 0600))
+	requireNoError(t, store.Set(9))
+	if err := p.LoadWithRecovery(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if store.Get() != 7 {
+		t.Fatalf("recovered state = %d, want 7", store.Get())
+	}
+	if raw, err := os.ReadFile(path); err != nil || string(raw) != `{"broken":` {
+		t.Fatalf("primary changed: %q, %v", raw, err)
+	}
+
+	requireNoError(t, os.WriteFile(path+".bak", []byte(`{"also":"broken"`), 0600))
+	requireNoError(t, store.Set(11))
+	var recoveryErr *RecoveryError
+	if err := p.LoadWithRecovery(ctx); !errors.As(err, &recoveryErr) || !errors.Is(err, ErrPersistenceRecovery) {
+		t.Fatalf("recovery error = %v", err)
+	}
+	if recoveryErr.Primary == nil || recoveryErr.Backup == nil || store.Get() != 11 {
+		t.Fatalf("recovery causes/state = %+v, %d", recoveryErr, store.Get())
+	}
+}
+
+func TestPersistenceLoadWithRecoveryDoesNotFallbackOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	storage := &recoveryProbeStorage{}
+	p := NewPersistence(New(0), storage, JSONCodec[int]{})
+	if err := p.LoadWithRecovery(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled recovery = %v", err)
+	}
+	if storage.backupLoads != 0 {
+		t.Fatalf("canceled recovery touched backup %d times", storage.backupLoads)
+	}
+}
+
+type recoveryProbeStorage struct{ backupLoads int }
+
+func (*recoveryProbeStorage) Load(context.Context) ([]byte, error) {
+	return nil, errors.New("primary unavailable")
+}
+func (s *recoveryProbeStorage) LoadBackup(context.Context) ([]byte, error) {
+	s.backupLoads++
+	return nil, errors.New("backup unavailable")
+}
+func (*recoveryProbeStorage) Save(context.Context, []byte) error { return nil }
+
+func TestPersistenceLoadWithRecoveryKeepsConfigurationErrorsTyped(t *testing.T) {
+	var p *Persistence[int]
+	if err := p.LoadWithRecovery(context.Background()); !errors.Is(err, ErrInvalidPersistence) {
+		t.Fatalf("nil persistence = %v", err)
+	}
+}
