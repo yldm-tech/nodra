@@ -11,6 +11,8 @@
 
 ### Maintenance
 
+* compare public APIs with the latest published release and verify published consumers from the exact tagged commit
+* detect incompatible method, field, and interface changes hidden behind root-package type aliases
 * define the v1 public API, support, callback, DevTools and security release gates
 * raise the minimum Go toolchain to 1.27.3 for the current standard-library security fix
 

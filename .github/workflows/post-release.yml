@@ -17,39 +17,42 @@ permissions:
   contents: read
 env:
   MODULE: github.com/yldm-tech/nodra
+  GOWORK: "off"
+  GOPROXY: https://proxy.golang.org
+  GOSUMDB: sum.golang.org
+  GOPRIVATE: ""
+  GONOPROXY: ""
+  GONOSUMDB: ""
 jobs:
   # Proves the tag is a valid Go module tag that consumers can fetch: listed and downloaded through proxy.golang.org, checksum verified against sum.golang.org.
   verify-proxy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve and validate release tag
+        id: version
+        env:
+          RELEASED_VERSION: ${{ inputs.version }}
+        run: bash scripts/resolve-release.sh "$RELEASED_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Check out the exact release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.version.outputs.commit }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - id: version
-        env:
-          RELEASED_VERSION: ${{ inputs.version }}
-        run: |
-          version=${RELEASED_VERSION:-v$(jq -r '.["."]' .release-please-manifest.json)}
-          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "::error::no released version (got $version)"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag $version"
       - name: Resolve through proxy.golang.org
         working-directory: ${{ runner.temp }}
         env:
-          GOWORK: "off"
-          GOPROXY: https://proxy.golang.org
+          GOMODCACHE: ${{ runner.temp }}/released-module-cache
           GOFLAGS: -modcacherw
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           # The proxy fetches a new tag on first request; retry for a few minutes in case GitHub has not served it yet.
           for attempt in $(seq 1 20); do
-            if go list -m "$MODULE@$VERSION"; then
-              go mod download -json "$MODULE@$VERSION"
+            if go list -m "$MODULE@$VERSION" && go mod download -json "$MODULE@$VERSION"; then
               exit 0
             fi
             echo "attempt $attempt: $MODULE@$VERSION not resolvable through the proxy yet"
@@ -59,7 +62,6 @@ jobs:
           exit 1
       - name: Compile and run an independent published-module consumer
         env:
-          GOPROXY: https://proxy.golang.org
-          GOWORK: "off"
+          GOMODCACHE: ${{ runner.temp }}/released-module-cache
           VERSION: ${{ steps.version.outputs.version }}
         run: bash scripts/check-consumer.sh "$VERSION"
