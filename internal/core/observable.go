@@ -12,17 +12,26 @@ type Observable[T any] interface {
 }
 
 func validObservable[T any](source Observable[T]) bool {
-	if source == nil {
-		return false
-	}
-	v := reflect.ValueOf(source)
-	if v.Kind() == reflect.Pointer && v.IsNil() {
+	if isNilInterface(source) {
 		return false
 	}
 	if reader, ok := source.(Reader[T]); ok {
 		return sourceStore(reader) != nil
 	}
 	return true
+}
+
+func isNilInterface(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 func (s *Store[T]) SubscribeSnapshot(fn func(Snapshot[T])) func()   { return s.Subscribe(fn) }

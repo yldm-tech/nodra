@@ -15,6 +15,11 @@ type memoryStorage struct {
 	err  error
 }
 
+type typedNilStorage struct{}
+
+func (*typedNilStorage) Load(context.Context) ([]byte, error) { panic("typed-nil storage was called") }
+func (*typedNilStorage) Save(context.Context, []byte) error   { panic("typed-nil storage was called") }
+
 func (m *memoryStorage) Load(context.Context) ([]byte, error) {
 	return append([]byte(nil), m.data...), m.err
 }
@@ -33,6 +38,30 @@ func (jsonCodec[T]) Decode(data []byte) (T, error) {
 	var value T
 	err := json.Unmarshal(data, &value)
 	return value, err
+}
+
+func TestPersistenceRejectsTypedNilDependencies(t *testing.T) {
+	var storage *typedNilStorage
+	var codec *jsonCodec[int]
+	validStorage := &memoryStorage{}
+	validCodec := jsonCodec[int]{}
+
+	for name, persistence := range map[string]*Persistence[int]{
+		"storage": NewPersistence(New(1), storage, validCodec),
+		"codec":   NewPersistence(New(1), validStorage, codec),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := persistence.Load(context.Background()); !errors.Is(err, ErrInvalidPersistence) {
+				t.Fatalf("load error = %v, want ErrInvalidPersistence", err)
+			}
+			if err := persistence.Save(context.Background()); !errors.Is(err, ErrInvalidPersistence) {
+				t.Fatalf("save error = %v, want ErrInvalidPersistence", err)
+			}
+			if _, err := persistence.AutoSaveAsync(context.Background(), AsyncOptions{}); !errors.Is(err, ErrInvalidPersistence) {
+				t.Fatalf("async error = %v, want ErrInvalidPersistence", err)
+			}
+		})
+	}
 }
 
 func TestPersistenceLoadSave(t *testing.T) {
