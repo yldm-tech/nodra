@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/yldm-tech/nodra/compare/v0.7.0...v0.8.0) (2026-10-25)
+
+
+### Features
+
+* harden transactions retries persistence and DevTools ([#29](https://github.com/yldm-tech/nodra/issues/29)) ([ae923af](https://github.com/yldm-tech/nodra/commit/ae923affcfdc96827295aff19d93389ab2c13d3c))
+
 ## [0.7.0](https://github.com/yldm-tech/nodra/compare/v0.6.0...v0.7.0) (2026-10-24)
 
 
@@ -9,7 +16,6 @@
 
 ### Features
 
-* add save conflict detection and production state diagnostics ([#27](https://github.com/yldm-tech/nodra/issues/27)) ([27b7b99](https://github.com/yldm-tech/nodra/commit/27b7b99ad1c90cd36f818d79de3e184e370f2521))
 * compose derived state, debounce actions and bound diagnostic costs ([#25](https://github.com/yldm-tech/nodra/issues/25)) ([797a848](https://github.com/yldm-tech/nodra/commit/797a848b375772cb9aea85fccf6f084aad1797b2))
 
 ## [0.6.0](https://github.com/yldm-tech/nodra/compare/v0.5.0...v0.6.0) (2026-10-24)
