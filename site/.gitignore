@@ -1,0 +1,7 @@
+# routeTree.gen.ts is committed so the type-check (tsc, no build) has route types.
+node_modules/
+dist/
+.wrangler/
+.vite/
+.tanstack/
+.dev.vars*
