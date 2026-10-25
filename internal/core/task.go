@@ -544,7 +544,7 @@ func (a *AsyncAction[T, I, R]) shutdown() []*Task {
 	return tasks
 }
 
-// PanicError reports a panic at the asynchronous user-code boundary. The Store may already have committed if a notification or completion hook panicked.
+// PanicError reports a panic at an asynchronous user-code boundary, during atomic transaction preparation, or in Scope cleanup. An asynchronous action's Store may already have committed if a notification or completion hook panicked; atomic preparation failures leave the participating stores unchanged.
 type PanicError struct{ Value any }
 
 func (e *PanicError) Error() string { return fmt.Sprintf("nodra: async action panic: %v", e.Value) }

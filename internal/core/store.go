@@ -180,7 +180,7 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 	return err
 }
 
-// Atomic2 commits two different stores as one visibility boundary. All source values are prepared while both store locks are held; a callback error or panic leaves both stores unchanged. Readers and ordinary writers wait until both values are committed. Notifications run after the boundary is released, so listeners may safely reenter either store. The callback must not call Store methods directly; use the provided pointers.
+// Atomic2 commits two different stores as one visibility boundary. All source values are prepared while both store locks are held; a callback error or panic leaves both stores unchanged, with preparation panics returned as PanicError. Readers and ordinary writers wait until both values are committed. Notifications run after the boundary is released, so listeners may safely reenter either store. A notification panic propagates unchanged without rolling back the committed stores. The callback must not call Store methods directly; use the provided pointers.
 func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error) (err error) {
 	if first == nil || second == nil || any(first) == any(second) || fn == nil {
 		return errors.New("nodra: invalid atomic transaction")
@@ -206,9 +206,9 @@ func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error)
 		}
 		if transactionHeld {
 			storeTransactionMu.Unlock()
-		}
-		if recovered := recover(); recovered != nil {
-			err = &PanicError{Value: recovered}
+			if recovered := recover(); recovered != nil {
+				err = &PanicError{Value: recovered}
+			}
 		}
 	}()
 	firstBefore, secondBefore := first.value, second.value
@@ -295,6 +295,7 @@ func (s *Store[T]) BatchErr(fn func() error) error {
 	return fn()
 }
 
+// Close releases subscriptions and signals Done. It leaves the last snapshot readable and rejects subsequent writes. Repeated calls return ErrClosed.
 func (s *Store[T]) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
