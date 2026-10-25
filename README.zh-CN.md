@@ -1,5 +1,12 @@
 # Nodra
 
+[![Website](https://img.shields.io/badge/website-nodra.yldm.ai-c8f05a)](https://nodra.yldm.ai)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yldm-tech/nodra.svg)](https://pkg.go.dev/github.com/yldm-tech/nodra)
+[![Latest version](https://img.shields.io/github/v/release/yldm-tech/nodra)](https://github.com/yldm-tech/nodra/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/yldm-tech/nodra)](go.mod)
+[![GitHub stars](https://img.shields.io/github/stars/yldm-tech/nodra?style=flat)](https://github.com/yldm-tech/nodra/stargazers)
+[![License](https://img.shields.io/github/license/yldm-tech/nodra)](LICENSE)
+
 Nodra 是面向 Go 桌面应用的并发安全响应式状态库，为 [MyGo](https://github.com/egoist/mygo) 提供类似 Zustand 的使用体验，同时让状态与渲染器和持久化后端保持独立。
 
 [English](README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md)
