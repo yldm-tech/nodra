@@ -6,6 +6,14 @@ import (
 	"github.com/egoist/mygo"
 )
 
+// InvalidationTarget is the minimal redraw capability required by
+// InvalidateTarget. MyGo Window satisfies it, as do test fakes and other
+// native UI hosts. Implementations must make Invalidate safe to call from a
+// Store subscriber goroutine.
+type InvalidationTarget interface {
+	Invalidate()
+}
+
 // InvalidateProjection requests frames only when an owned projection changes, without cloning the entire source. The projector and callbacks follow SubscribeProjection's ownership rules. The window owns the subscription lifetime.
 func InvalidateProjection[T, V any](source Reader[T], window *mygo.Window, project func(T) V) func() {
 	return InvalidateProjectionWith(source, window, project, SelectorOptions[V]{})
@@ -29,6 +37,17 @@ func Invalidate[T any](source Observable[T], window *mygo.Window) (stop func()) 
 	return bindInvalidation(window, func(redraw func()) func() {
 		return source.SubscribeSnapshot(func(Snapshot[T]) { redraw() })
 	})
+}
+
+// InvalidateTarget requests a redraw from any InvalidationTarget whenever the
+// source publishes. It accepts read-only and derived sources without exposing
+// a concrete UI toolkit. The caller owns the target lifecycle and should call
+// the returned stop function when the target is no longer valid.
+func InvalidateTarget[T any](source Observable[T], target InvalidationTarget) func() {
+	if !validObservable(source) || target == nil {
+		return func() {}
+	}
+	return source.SubscribeSnapshot(func(Snapshot[T]) { target.Invalidate() })
 }
 
 // InvalidateSelector requests a frame only when the selected value changes, using SubscribeSelector's equality rules. The subscription stops when the window closes or the returned function is called. Selectors run on writer goroutines and must be concurrency-safe; selected reference values follow the store's ownership policy.

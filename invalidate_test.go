@@ -30,6 +30,31 @@ func TestInvalidateHandlesNilInputs(t *testing.T) {
 	}
 }
 
+type invalidationTargetFake struct{ calls int }
+
+func (f *invalidationTargetFake) Invalidate() { f.calls++ }
+
+func TestInvalidateTargetSupportsCustomHostsAndDerivedSources(t *testing.T) {
+	store := New(0)
+	derived := Derive(store, func(value int) int { return value * 2 }, func(a, b int) bool { return a == b })
+	defer func() { _ = derived.Close() }()
+	target := new(invalidationTargetFake)
+	stop := InvalidateTarget(derived, target)
+	if err := store.Set(2); err != nil {
+		t.Fatal(err)
+	}
+	if target.calls != 1 {
+		t.Fatalf("invalidations = %d, want 1", target.calls)
+	}
+	stop()
+	if err := store.Set(3); err != nil {
+		t.Fatal(err)
+	}
+	if target.calls != 1 {
+		t.Fatalf("stopped invalidations = %d, want 1", target.calls)
+	}
+}
+
 func TestInvalidateSubscribesUntilStopped(t *testing.T) {
 	store := New(0)
 	// A window without native Content ignores Invalidate, so publishing exercises the subscription without a running MyGo app.
