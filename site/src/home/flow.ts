@@ -218,7 +218,7 @@ export function flowView(M: FlowModel | null, li: 0 | 1) {
 		} else if (st === 'saved') {
 			note = '→ state.json';
 			noteColor = border = valColor = '#c8f05a';
-		} else note = ['selector(s.Count)', 'selector(s.Title)', 'Track(store)', 'AutoSaveAsync'][k];
+		} else note = ['selector(s.Count)', 'selector(s.Title)', 'Track(store)', 'AutoSaveAsync · 100ms'][k];
 		return {
 			name: names[k],
 			top: `${[12, 37, 62, 87][k]}%`,
