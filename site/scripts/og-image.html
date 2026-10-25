@@ -1,0 +1,239 @@
+<!doctype html>
+<!-- Social card template, 1200x630. Rendered to public/og/<page>-<lang>.png by og-image.sh; ?page=home|docs&lang=zh|en picks the copy. -->
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+SC:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet" />
+		<style>
+			html,
+			body {
+				margin: 0;
+				width: 1200px;
+				height: 630px;
+				overflow: hidden;
+				background: #060709;
+				color: #eef0ea;
+				font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+				-webkit-font-smoothing: antialiased;
+			}
+			.card {
+				position: relative;
+				box-sizing: border-box;
+				width: 1200px;
+				height: 630px;
+				padding: 64px 72px;
+				display: flex;
+				flex-direction: column;
+				background:
+					radial-gradient(ellipse 620px 480px at 88% 62%, rgba(200, 240, 90, 0.16), transparent 70%),
+					radial-gradient(circle at 1px 1px, rgba(238, 240, 234, 0.07) 1px, transparent 0) 0 0 / 28px 28px,
+					#060709;
+			}
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 14px;
+				font-size: 34px;
+				font-weight: 700;
+				letter-spacing: -0.035em;
+			}
+			.kicker {
+				margin-top: 54px;
+				font-family: 'JetBrains Mono', monospace;
+				font-size: 19px;
+				letter-spacing: 0.16em;
+				color: #c8f05a;
+			}
+			h1 {
+				margin: 18px 0 0;
+				font-size: 78px;
+				line-height: 1.04;
+				letter-spacing: -0.05em;
+				font-weight: 700;
+				max-width: 740px;
+			}
+			h1 span {
+				display: block;
+			}
+			h1 .hi {
+				color: #c8f05a;
+			}
+			.cmd {
+				margin-top: auto;
+				align-self: flex-start;
+				display: flex;
+				gap: 14px;
+				padding: 16px 26px;
+				border-radius: 999px;
+				border: 1px solid rgba(238, 240, 234, 0.16);
+				background: #0d0f13;
+				font-family: 'JetBrains Mono', monospace;
+				font-size: 22px;
+			}
+			.cmd b {
+				color: #c8f05a;
+				font-weight: 500;
+			}
+			.art {
+				position: absolute;
+				right: 64px;
+				bottom: 56px;
+				width: 400px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+			}
+			.panel {
+				box-sizing: border-box;
+				width: 400px;
+				margin-top: -6px;
+				padding: 22px 26px;
+				border-radius: 24px;
+				border: 1.5px solid #c8f05a;
+				background: #12151b;
+				box-shadow: 0 0 70px -14px rgba(200, 240, 90, 0.55);
+				font-family: 'JetBrains Mono', monospace;
+			}
+			.panel .row {
+				display: flex;
+				justify-content: space-between;
+				font-size: 16px;
+				color: #9ea197;
+			}
+			.panel .row .ok {
+				color: #c8f05a;
+			}
+			.panel .ver {
+				margin-top: 10px;
+				font-size: 60px;
+				font-weight: 700;
+				letter-spacing: -0.02em;
+				line-height: 1;
+				color: #c8f05a;
+			}
+			.panel .state {
+				margin-top: 14px;
+				padding-top: 12px;
+				border-top: 1px solid rgba(238, 240, 234, 0.08);
+				font-size: 17px;
+				line-height: 1.6;
+				color: #9ea197;
+			}
+			.panel .state em {
+				font-style: normal;
+				color: #eef0ea;
+				font-weight: 700;
+			}
+			.panel .state i {
+				font-style: normal;
+				color: #f0c674;
+			}
+			.sig {
+				display: block;
+				margin-top: 10px;
+				padding: 8px 12px;
+				border-radius: 10px;
+				border: 1px solid rgba(200, 240, 90, 0.18);
+				background: rgba(200, 240, 90, 0.07);
+				color: #c8f05a;
+				font-size: 13.5px;
+				white-space: nowrap;
+			}
+			.sig:first-child {
+				margin-top: 0;
+			}
+			[hidden] {
+				display: none !important;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="brand">
+				<svg width="46" height="44" viewBox="0 0 64 64" aria-hidden="true">
+					<rect x="31" y="8" width="2" height="10" fill="#6f9a2a" />
+					<ellipse cx="25" cy="10" rx="7" ry="4" fill="#c8f05a" transform="rotate(-25 25 10)" />
+					<ellipse cx="39" cy="9" rx="7" ry="4" fill="#c8f05a" transform="rotate(25 39 9)" />
+					<circle cx="15" cy="24" r="8" fill="#fbf6ea" />
+					<circle cx="49" cy="24" r="8" fill="#fbf6ea" />
+					<ellipse cx="32" cy="40" rx="27" ry="21" fill="#fbf6ea" />
+					<ellipse cx="24" cy="39" rx="3" ry="4" fill="#1d1f1a" />
+					<ellipse cx="40" cy="39" rx="3" ry="4" fill="#1d1f1a" />
+					<ellipse cx="17" cy="47" rx="4.5" ry="2.6" fill="#ff8c82" />
+					<ellipse cx="47" cy="47" rx="4.5" ry="2.6" fill="#ff8c82" />
+				</svg>
+				nodra
+			</div>
+			<div class="kicker" id="kicker"></div>
+			<h1><span id="t1"></span><span class="hi" id="t2"></span></h1>
+			<div class="cmd"><b>$</b><span>go get github.com/yldm-tech/nodra@latest</span></div>
+
+			<div class="art">
+				<!-- Dra, drawn from the Mascot component's 160x150 geometry with the happy face. -->
+				<svg width="280" height="262" viewBox="0 0 160 150" aria-hidden="true">
+					<g stroke="#1d1f1a" stroke-width="3">
+						<rect x="79" y="12" width="4" height="22" rx="2" fill="#6f9a2a" stroke="none" />
+						<ellipse cx="71" cy="12" rx="10" ry="6" fill="#c8f05a" stroke-width="2.5" transform="rotate(-28 71 12)" />
+						<ellipse cx="91" cy="8" rx="10" ry="6" fill="#c8f05a" stroke-width="2.5" transform="rotate(28 91 8)" />
+						<circle cx="44" cy="48" r="12.5" fill="#fbf6ea" />
+						<circle cx="116" cy="48" r="12.5" fill="#fbf6ea" />
+						<circle cx="133" cy="111" r="7.5" fill="#fbf6ea" />
+						<path d="M25.5 96.4 A55.5 55 0 0 1 136.5 96.4 A55.5 36.5 0 0 1 25.5 96.4 Z" fill="#fbf6ea" />
+					</g>
+					<circle cx="44" cy="48" r="5" fill="#ffc4bd" />
+					<circle cx="116" cy="48" r="5" fill="#ffc4bd" />
+					<ellipse cx="81" cy="113" rx="27" ry="15" fill="#f1ecdc" />
+					<g stroke="#1d1f1a" stroke-width="3" fill="#fbf6ea">
+						<ellipse cx="60" cy="128.5" rx="10.5" ry="5" />
+						<ellipse cx="102" cy="128.5" rx="10.5" ry="5" />
+					</g>
+					<g stroke="#1d1f1a" stroke-width="3" fill="none" stroke-linecap="round">
+						<path d="M55 82.5 Q60.5 74 66 82.5" />
+						<path d="M95 82.5 Q100.5 74 106 82.5" />
+					</g>
+					<ellipse cx="50" cy="92.5" rx="8" ry="4.5" fill="rgba(255,140,130,0.6)" />
+					<ellipse cx="112" cy="92.5" rx="8" ry="4.5" fill="rgba(255,140,130,0.6)" />
+					<path d="M75.25 86.25 H86.75 V90 Q86.75 93.75 81 93.75 Q75.25 93.75 75.25 90 Z" fill="#e8665c" stroke="#1d1f1a" stroke-width="2.5" stroke-linejoin="round" />
+					<rect x="58" y="105" width="46" height="18" rx="5" fill="#0d0f13" stroke="#c8f05a" stroke-width="2" />
+					<text x="81" y="117.6" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700" fill="#c8f05a">v1.0.0</text>
+					<g stroke="#1d1f1a" stroke-width="2.5" fill="#fbf6ea">
+						<circle cx="57" cy="111" r="5.75" />
+						<circle cx="105" cy="111" r="5.75" />
+					</g>
+				</svg>
+
+				<div class="panel" id="store">
+					<div class="row"><span>Store[State]</span><span class="ok">committed ✓</span></div>
+					<div class="ver">v0043</div>
+					<div class="state">count: <em>8</em><br />title: <i>"Nodra"</i></div>
+				</div>
+				<div class="panel" id="sigs" hidden>
+					<code class="sig">Update(fn func(*T)) error</code>
+					<code class="sig">Subscribe(fn func(Snapshot[T])) func()</code>
+					<code class="sig">Track[T](store, limit) *History[T]</code>
+					<code class="sig">NewPersistence(store, storage, codec)</code>
+				</div>
+			</div>
+		</div>
+		<script>
+			const COPY = {
+				home: {
+					zh: { kicker: '为 GO 桌面应用打造的响应式状态管理', t1: '看得见的', t2: '状态管理。' },
+					en: { kicker: 'REACTIVE STATE FOR GO DESKTOP', t1: 'State management,', t2: 'made visible.' },
+				},
+				docs: {
+					zh: { kicker: 'NODRA 文档 · API 参考', t1: '每个方法，', t2: '都讲清楚。' },
+					en: { kicker: 'NODRA DOCS · API REFERENCE', t1: 'Every method,', t2: 'explained.' },
+				},
+			};
+			const q = new URLSearchParams(location.search);
+			const page = q.get('page') === 'docs' ? 'docs' : 'home';
+			const lang = q.get('lang') === 'en' ? 'en' : 'zh';
+			const c = COPY[page][lang];
+			document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+			for (const k of ['kicker', 't1', 't2']) document.getElementById(k).textContent = c[k];
+			document.getElementById('store').hidden = page === 'docs';
+			document.getElementById('sigs').hidden = page !== 'docs';
+		</script>
+	</body>
+</html>
