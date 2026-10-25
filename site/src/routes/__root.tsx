@@ -52,6 +52,8 @@ function RootDocument({ children }: { children: ReactNode }) {
 		<html lang={lang === 'en' ? 'en' : 'zh-CN'}>
 			<head>
 				<HeadContent />
+				{/* Cloudflare Web Analytics: cookieless page views; the beacon also records client-side route changes. */}
+				<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "1a0753d27c464839a3af309cdc3da281"}' />
 			</head>
 			<body>
 				{children}
