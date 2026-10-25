@@ -1,0 +1,101 @@
+- ./devtools.Attach: changed from func(*Inspector, string, github.com/yldm-tech/nodra.Reader[T]) (func(), error) to func(*Inspector, string, github.com/yldm-tech/nodra.Reader[T]) (func(), error)
+- ./devtools.Event.Metrics: changed from github.com/yldm-tech/nodra.TaskMetrics to github.com/yldm-tech/nodra/internal/core.TaskMetrics
+- ./devtools.Event.Mutation: changed from github.com/yldm-tech/nodra.MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- ./devtools.Event.Phase: changed from github.com/yldm-tech/nodra.TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- AESGCMCodec: changed from AESGCMCodec[T any] to github.com/yldm-tech/nodra/internal/core.AESGCMCodec[T]
+- ActionEvent: changed from ActionEvent to github.com/yldm-tech/nodra/internal/core.ActionEvent
+- ActionHooks: changed from ActionHooks to github.com/yldm-tech/nodra/internal/core.ActionHooks
+- ActionMetrics: changed from ActionMetrics to github.com/yldm-tech/nodra/internal/core.ActionMetrics
+- ActionOptions: changed from ActionOptions[I any] to github.com/yldm-tech/nodra/internal/core.ActionOptions[I]
+- ActionPolicy: changed from ActionPolicy to github.com/yldm-tech/nodra/internal/core.ActionPolicy
+- ActionTrace: changed from ActionTrace to github.com/yldm-tech/nodra/internal/core.ActionTrace
+- AsyncAction: changed from AsyncAction[T, I, R any] to github.com/yldm-tech/nodra/internal/core.AsyncAction[T, I, R]
+- AsyncOptions: changed from AsyncOptions to github.com/yldm-tech/nodra/internal/core.AsyncOptions
+- AsyncPersistence: changed from AsyncPersistence[T any] to github.com/yldm-tech/nodra/internal/core.AsyncPersistence[T]
+- AsyncState: changed from AsyncState to github.com/yldm-tech/nodra/internal/core.AsyncState
+- Atomic2: changed from func(*Store[A], *Store[B], func(*A, *B) error) error to func(*Store[A], *Store[B], func(*A, *B) error) error
+- AtomicGroup: changed from func(...AtomicOp) error to func(...AtomicOp) error
+- AtomicOp: changed from AtomicOp to github.com/yldm-tech/nodra/internal/core.AtomicOp
+- AtomicUpdate: changed from func(*Store[T], func(*T) error) AtomicOp to func(*Store[T], func(*T) error) AtomicOp
+- BindField: changed from func(*Store[T], func(T) V, func(*T, V) error) (Field[T, V], error) to func(*Store[T], func(T) V, func(*T, V) error) (Field[T, V], error)
+- CheckedFileStorage: changed from CheckedFileStorage to github.com/yldm-tech/nodra/internal/core.CheckedFileStorage
+- Codec: changed from Codec[T any] to github.com/yldm-tech/nodra/internal/core.Codec[T]
+- Combine: changed from func(Observable[A], Observable[B], func(A, B) V, func(V, V) bool) *Derived[Pair[A, B], V] to func(Observable[A], Observable[B], func(A, B) V, func(V, V) bool) *Derived[Pair[A, B], V]
+- Create: changed from func(T) *Store[T] to func(T) *Store[T]
+- Define: changed from func(string, func() T) *Definition[T] to func(string, func() T) *Definition[T]
+- DefineWithClone: changed from func(string, func() T, func(T) T) *Definition[T] to func(string, func() T, func(T) T) *Definition[T]
+- Definition: changed from Definition[T any] to github.com/yldm-tech/nodra/internal/core.Definition[T]
+- Derive: changed from func(Observable[T], func(T) V, func(V, V) bool) *Derived[T, V] to func(Observable[T], func(T) V, func(V, V) bool) *Derived[T, V]
+- DeriveProjection: changed from func(Reader[T], func(T) V, func(V, V) bool) *Derived[T, V] to func(Reader[T], func(T) V, func(V, V) bool) *Derived[T, V]
+- Derived: changed from Derived[T, V any] to github.com/yldm-tech/nodra/internal/core.Derived[T, V]
+- Field: changed from Field[T, V any] to github.com/yldm-tech/nodra/internal/core.Field[T, V]
+- FileConflictError: changed from FileConflictError to github.com/yldm-tech/nodra/internal/core.FileConflictError
+- FileFingerprint: changed from FileFingerprint to github.com/yldm-tech/nodra/internal/core.FileFingerprint
+- FileStorage: changed from FileStorage to github.com/yldm-tech/nodra/internal/core.FileStorage
+- History: changed from History[T any] to github.com/yldm-tech/nodra/internal/core.History[T]
+- HistoryOptions: changed from HistoryOptions[T any] to github.com/yldm-tech/nodra/internal/core.HistoryOptions[T]
+- HistoryState: changed from HistoryState to github.com/yldm-tech/nodra/internal/core.HistoryState
+- Invalidate: changed from func(Observable[T], *github.com/egoist/mygo.Window) func() to func(Observable[T], *github.com/egoist/mygo.Window) func()
+- InvalidateProjection: changed from func(Reader[T], *github.com/egoist/mygo.Window, func(T) V) func() to func(Reader[T], *github.com/egoist/mygo.Window, func(T) V) func()
+- InvalidateProjectionWith: changed from func(Reader[T], *github.com/egoist/mygo.Window, func(T) V, SelectorOptions[V]) func() to func(Reader[T], *github.com/egoist/mygo.Window, func(T) V, SelectorOptions[V]) func()
+- InvalidateSelector: changed from func(Observable[T], *github.com/egoist/mygo.Window, func(T) V) func() to func(Observable[T], *github.com/egoist/mygo.Window, func(T) V) func()
+- InvalidateSelectorWith: changed from func(Observable[T], *github.com/egoist/mygo.Window, func(T) V, SelectorOptions[V]) func() to func(Observable[T], *github.com/egoist/mygo.Window, func(T) V, SelectorOptions[V]) func()
+- InvalidateTarget: changed from func(Observable[T], InvalidationTarget) func() to func(Observable[T], InvalidationTarget) func()
+- InvalidationTarget: changed from InvalidationTarget to github.com/yldm-tech/nodra/internal/core.InvalidationTarget
+- JSONCodec: changed from JSONCodec[T any] to github.com/yldm-tech/nodra/internal/core.JSONCodec[T]
+- JSONMigration: changed from JSONMigration to github.com/yldm-tech/nodra/internal/core.JSONMigration
+- KeyProvider: changed from KeyProvider to github.com/yldm-tech/nodra/internal/core.KeyProvider
+- LatestWins: changed from ActionPolicy to github.com/yldm-tech/nodra/internal/core.ActionPolicy
+- LoadError: changed from LoadError to github.com/yldm-tech/nodra/internal/core.LoadError
+- MemoryKeyProvider: changed from MemoryKeyProvider to github.com/yldm-tech/nodra/internal/core.MemoryKeyProvider
+- MetricsSink: changed from MetricsSink to github.com/yldm-tech/nodra/internal/core.MetricsSink
+- Mutation: changed from Mutation[T any] to github.com/yldm-tech/nodra/internal/core.Mutation[T]
+- MutationAction: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- MutationDirect: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- MutationPatch: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- MutationReset: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- MutationTransaction: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- MutationType: changed from MutationType to github.com/yldm-tech/nodra/internal/core.MutationType
+- New: changed from func(T) *Store[T] to func(T) *Store[T]
+- NewAsyncAction: changed from func(*Store[T], string, func(context.Context, I, func(float64)) (R, error), func(*T, R) error) (*AsyncAction[T, I, R], error) to func(*Store[T], string, func(context.Context, I, func(float64)) (R, error), func(*T, R) error) (*AsyncAction[T, I, R], error)
+- NewAsyncActionWithOptions: changed from func(*Store[T], string, func(context.Context, I, func(float64)) (R, error), func(*T, R) error, ActionOptions[I]) (*AsyncAction[T, I, R], error) to func(*Store[T], string, func(context.Context, I, func(float64)) (R, error), func(*T, R) error, ActionOptions[I]) (*AsyncAction[T, I, R], error)
+- NewMemoryKeyProvider: changed from func(string, []byte) (*MemoryKeyProvider, error) to func(string, []byte) (*MemoryKeyProvider, error)
+- NewPersistence: changed from func(*Store[T], Storage, Codec[T]) *Persistence[T] to func(*Store[T], Storage, Codec[T]) *Persistence[T]
+- NewPersistenceWithOptions: changed from func(*Store[T], Storage, Codec[T], PersistenceOptions[T]) *Persistence[T] to func(*Store[T], Storage, Codec[T], PersistenceOptions[T]) *Persistence[T]
+- NewScope: changed from func() *Scope to func() *Scope
+- NewWithClone: changed from func(T, func(T) T) *Store[T] to func(T, func(T) T) *Store[T]
+- Observable: changed from Observable[T any] to github.com/yldm-tech/nodra/internal/core.Observable[T]
+- Pair: changed from Pair[A, B any] to github.com/yldm-tech/nodra/internal/core.Pair[A, B]
+- PanicError: changed from PanicError to github.com/yldm-tech/nodra/internal/core.PanicError
+- Persistence: changed from Persistence[T any] to github.com/yldm-tech/nodra/internal/core.Persistence[T]
+- PersistenceOptions: changed from PersistenceOptions[T any] to github.com/yldm-tech/nodra/internal/core.PersistenceOptions[T]
+- PersistenceState: changed from PersistenceState to github.com/yldm-tech/nodra/internal/core.PersistenceState
+- QueueAll: changed from ActionPolicy to github.com/yldm-tech/nodra/internal/core.ActionPolicy
+- ReadOnly: changed from ReadOnly[T any] to github.com/yldm-tech/nodra/internal/core.ReadOnly[T]
+- Reader: changed from Reader[T any] to github.com/yldm-tech/nodra/internal/core.Reader[T]
+- RecoveryError: changed from RecoveryError to github.com/yldm-tech/nodra/internal/core.RecoveryError
+- RetryOptions: changed from RetryOptions to github.com/yldm-tech/nodra/internal/core.RetryOptions
+- Scope: changed from Scope to github.com/yldm-tech/nodra/internal/core.Scope
+- Select: changed from func(Reader[T], func(T) V) Snapshot[V] to func(Reader[T], func(T) V) Snapshot[V]
+- SelectorOptions: changed from SelectorOptions[V any] to github.com/yldm-tech/nodra/internal/core.SelectorOptions[V]
+- Snapshot: changed from Snapshot[T any] to github.com/yldm-tech/nodra/internal/core.Snapshot[T]
+- Storage: changed from Storage to github.com/yldm-tech/nodra/internal/core.Storage
+- Store: changed from Store[T any] to github.com/yldm-tech/nodra/internal/core.Store[T]
+- SubscribeOptions: changed from SubscribeOptions[T any] to github.com/yldm-tech/nodra/internal/core.SubscribeOptions[T]
+- SubscribeProjection: changed from func(Reader[T], func(T) V, func(V)) func() to func(Reader[T], func(T) V, func(V)) func()
+- SubscribeProjectionWith: changed from func(Reader[T], func(T) V, func(current V, previous V), SelectorOptions[V]) func() to func(Reader[T], func(T) V, func(current V, previous V), SelectorOptions[V]) func()
+- SubscribeSelector: changed from func(Observable[T], func(T) S, func(S)) func() to func(Observable[T], func(T) S, func(S)) func()
+- SubscribeSelectorWith: changed from func(Observable[T], func(T) V, func(current V, previous V), SelectorOptions[V]) func() to func(Observable[T], func(T) V, func(current V, previous V), SelectorOptions[V]) func()
+- Task: changed from Task to github.com/yldm-tech/nodra/internal/core.Task
+- TaskCanceled: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskFailed: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskMetrics: changed from TaskMetrics to github.com/yldm-tech/nodra/internal/core.TaskMetrics
+- TaskPhase: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskQueued: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskRunning: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskSnapshot: changed from TaskSnapshot to github.com/yldm-tech/nodra/internal/core.TaskSnapshot
+- TaskSucceeded: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- TaskSuperseded: changed from TaskPhase to github.com/yldm-tech/nodra/internal/core.TaskPhase
+- Track: changed from func(*Store[T], int) *History[T] to func(*Store[T], int) *History[T]
+- TrackWith: changed from func(*Store[T], HistoryOptions[T]) *History[T] to func(*Store[T], HistoryOptions[T]) *History[T]
+- VersionedJSONCodec: changed from VersionedJSONCodec[T any] to github.com/yldm-tech/nodra/internal/core.VersionedJSONCodec[T]
