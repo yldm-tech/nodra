@@ -3,7 +3,9 @@
   "release-type": "go",
   "include-component-in-tag": false,
   "include-v-in-tag": true,
-  "bump-minor-pre-major": true,
+  "bump-minor-pre-major": false,
+  "pull-request-header": "Prepare the next Nodra release after its verification gates pass.",
+  "pull-request-footer": "Merging this pull request publishes the version and starts independent Go module verification.",
   "initial-version": "0.1.0",
   "bootstrap-sha": "5f262bc2edadd5d61815b07c71b899fd21019a62",
   "packages": {

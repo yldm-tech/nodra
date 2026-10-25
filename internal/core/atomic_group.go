@@ -70,7 +70,7 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 	}
 }
 
-// AtomicGroup commits any number of typed Store updates as one visibility boundary. Every callback is prepared while all participating store locks are held; an error or panic leaves every store unchanged. Lock order is stable across calls, so groups built in opposite order cannot deadlock. Notifications run after all locks are released and may safely reenter their stores.
+// AtomicGroup commits any number of typed Store updates as one visibility boundary. Every callback is prepared while all participating store locks are held; an error or panic leaves every store unchanged, with preparation panics returned as PanicError. Lock order is stable across calls, so groups built in opposite order cannot deadlock. Notifications run after all locks are released and may safely reenter their stores. A notification panic propagates unchanged without rolling back the committed stores.
 func AtomicGroup(ops ...AtomicOp) (err error) {
 	return atomicGroupNamed("atomic-group", ops...)
 }
@@ -101,9 +101,9 @@ func atomicGroupNamed(_ string, ops ...AtomicOp) (err error) {
 		}
 		if transactionHeld {
 			storeTransactionMu.Unlock()
-		}
-		if recovered := recover(); recovered != nil {
-			err = &PanicError{Value: recovered}
+			if recovered := recover(); recovered != nil {
+				err = &PanicError{Value: recovered}
+			}
 		}
 	}()
 	for i := range locks {

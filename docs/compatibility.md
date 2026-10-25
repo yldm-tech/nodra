@@ -12,13 +12,13 @@ The v0.x contract includes only behavior stated in package documentation and tes
 
 ## v1
 
-The v1.0 release will stabilize the exported root-package API, the `Reader` and `Observable` contracts, persistence interfaces and codecs, and the documented ownership, versioning, rollback, shutdown, and transaction semantics. A v1 minor release will not remove or change the meaning of an exported identifier. Additions remain source-compatible and may introduce new optional fields or interfaces.
+The v1.0 release will stabilize the exported root-package and DevTools Go APIs, the `Reader` and `Observable` contracts, persistence interfaces and codecs, and the documented ownership, versioning, rollback, shutdown, and transaction semantics. A v1 minor release will not remove or change the meaning of an exported identifier. Additions remain source-compatible and may introduce new optional fields or interfaces. The supported baseline is Go 1.27.3 and MyGo 0.6.3, with the native and cross-build targets listed in [support.md](support.md).
 
 An exported API can still evolve in a v1 minor release when the change only adds a method to an interface that Nodra does not ask applications to implement. Interfaces intended for application implementations are kept minimal; adding a method to those interfaces is a breaking change and requires a major release or a new interface.
 
 Documented error identities and `errors.Is` relationships are part of the v1 contract. Error text, callback timing outside the stated ordering guarantees, JSON whitespace, DevTools presentation, and performance are not stable interfaces. A bug fix may change an outcome that contradicted the documentation, even when an application had come to depend on it.
 
-Callback failures follow the boundary that owns the callback. Store mutation, selector, projection, history and ordinary subscription callbacks run on the publishing goroutine; a panic propagates to that caller after internal locks and registrations have been released, and the already-committed source value is not rolled back. Async action work, apply callbacks, and scope cleanup turn panics into `PanicError` values. Persistence status/error observers and DevTools redaction/metrics observers contain callback panics so their worker or inspector remains usable. Callbacks must still be short, reentrant only where the relevant Go doc permits it, and safe for concurrent invocation.
+Callback failures follow the boundary that owns the callback. Store mutation, selector, projection, history and ordinary subscription callbacks run on the publishing goroutine; a panic propagates to that caller after internal locks and registrations have been released, and the already-committed source value is not rolled back. Atomic2 and AtomicGroup return preparation panics as `PanicError` without committing any participant; after commit, their notification panics propagate unchanged. Async action work, apply callbacks, and scope cleanup turn panics into `PanicError` values. Persistence status/error observers and DevTools redaction/metrics observers contain callback panics so their worker or inspector remains usable. Callbacks must still be short, reentrant only where the relevant Go doc permits it, and safe for concurrent invocation.
 
 ## Deprecation and release checks
 
@@ -28,7 +28,7 @@ The module follows Go module major-version rules. A future v2 module will use a 
 
 ## Current status
 
-Until v1.0, all APIs are v0.x APIs even when they are already documented and tested. `AtomicGroup` is additive in the current release line and follows the transaction guarantees in its Go doc; its exact surface may still receive source-compatible refinement before v1.0.
+The v1.0.0 release candidate freezes the exported root-package and DevTools APIs reviewed in [public-api.md](public-api.md), including `AtomicGroup`. The stable compatibility promises take effect when `v1.0.0` is published; candidate verification and publication evidence are recorded in [release-1.0.md](release-1.0.md).
 
 ## 1.0 release gate
 

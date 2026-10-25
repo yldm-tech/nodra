@@ -299,4 +299,109 @@ func TestPublicAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	inspector.Clear()
+	final := store.Snapshot()
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); !errors.Is(err, nodra.ErrClosed) {
+		t.Fatalf("repeated Close = %v", err)
+	}
+	if err := store.Set(appState{}); !errors.Is(err, nodra.ErrClosed) {
+		t.Fatalf("write after Close = %v", err)
+	}
+	if got := store.Snapshot(); got.Version != final.Version || got.Value.Count != final.Value.Count {
+		t.Fatal("Close changed the final readable snapshot")
+	}
+	select {
+	case <-store.Done():
+	default:
+		t.Fatal("Close did not signal Done")
+	}
+}
+
+func TestAtomicPanicBoundaries(t *testing.T) {
+	type update func(*int) error
+	for _, test := range []struct {
+		name string
+		run  func(*nodra.Store[int], *nodra.Store[int], update, update) error
+	}{
+		{"Atomic2", func(first, second *nodra.Store[int], a, b update) error {
+			return nodra.Atomic2(first, second, func(left, right *int) error {
+				if err := a(left); err != nil {
+					return err
+				}
+				return b(right)
+			})
+		}},
+		{"AtomicGroup", func(first, second *nodra.Store[int], a, b update) error {
+			return nodra.AtomicGroup(nodra.AtomicUpdate(first, a), nodra.AtomicUpdate(second, b))
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Run("candidate panic rolls back", func(t *testing.T) {
+				first, second := nodra.New(1), nodra.New(2)
+				defer func() { _ = first.Close(); _ = second.Close() }()
+				want := errors.New("candidate panic")
+				err := test.run(first, second, func(value *int) error { *value = 10; panic(want) }, func(value *int) error { *value = 20; return nil })
+				var panicErr *nodra.PanicError
+				if !errors.As(err, &panicErr) || panicErr.Value != want {
+					t.Fatalf("candidate panic = %v", err)
+				}
+				if first.Get() != 1 || second.Get() != 2 || first.Version() != 0 || second.Version() != 0 {
+					t.Fatal("candidate panic committed a partial transaction")
+				}
+			})
+			t.Run("commit clone panic rolls back", func(t *testing.T) {
+				want := errors.New("commit clone panic")
+				first := nodra.New(1)
+				second := nodra.NewWithClone(2, func(value int) int {
+					if value == 20 {
+						panic(want)
+					}
+					return value
+				})
+				defer func() { _ = first.Close(); _ = second.Close() }()
+				err := test.run(first, second, func(value *int) error { *value = 10; return nil }, func(value *int) error { *value = 20; return nil })
+				var panicErr *nodra.PanicError
+				if !errors.As(err, &panicErr) || panicErr.Value != want {
+					t.Fatalf("commit clone panic = %v", err)
+				}
+				if first.Get() != 1 || second.Get() != 2 || first.Version() != 0 || second.Version() != 0 {
+					t.Fatal("commit clone panic committed a partial transaction")
+				}
+			})
+			for _, notification := range []string{"snapshot", "mutation"} {
+				t.Run(notification+" panic preserves commit", func(t *testing.T) {
+					first, second := nodra.New(1), nodra.New(2)
+					defer func() { _ = first.Close(); _ = second.Close() }()
+					want := errors.New("notification panic")
+					var stop func()
+					if notification == "snapshot" {
+						stop = first.Subscribe(func(nodra.Snapshot[int]) { panic(want) })
+					} else {
+						stop = first.SubscribeMutations(func(nodra.Mutation[int]) { panic(want) })
+					}
+					defer stop()
+					var recovered any
+					func() {
+						defer func() { recovered = recover() }()
+						_ = test.run(first, second, func(value *int) error { *value = 10; return nil }, func(value *int) error { *value = 20; return nil })
+					}()
+					if recovered != want {
+						t.Fatalf("notification panic = %v, want original panic %v", recovered, want)
+					}
+					if first.Get() != 10 || second.Get() != 20 || first.Version() != 1 || second.Version() != 1 {
+						t.Fatal("notification panic rolled back or repeated an accepted commit")
+					}
+					stop()
+					if err := test.run(first, second, func(value *int) error { *value = 30; return nil }, func(value *int) error { *value = 40; return nil }); err != nil {
+						t.Fatal(err)
+					}
+					if first.Get() != 30 || second.Get() != 40 {
+						t.Fatal("transaction was unusable after a notification panic")
+					}
+				})
+			}
+		})
+	}
 }
