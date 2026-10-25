@@ -236,21 +236,23 @@ func (d *Derived[T, V]) Close() error {
 type MutationType string
 
 const (
-	MutationDirect MutationType = "direct"
-	MutationPatch  MutationType = "patch"
-	MutationAction MutationType = "action"
-	MutationReset  MutationType = "reset"
+	MutationDirect      MutationType = "direct"
+	MutationPatch       MutationType = "patch"
+	MutationAction      MutationType = "action"
+	MutationReset       MutationType = "reset"
+	MutationTransaction MutationType = "transaction"
 )
 
 // Mutation contains Pinia-like subscription metadata.
 type Mutation[T any] struct {
-	ActionID uint64
-	Type     MutationType
-	Name     string
-	Previous T
-	Value    T
-	Version  uint64
-	At       time.Time
+	ActionID      uint64
+	TransactionID uint64
+	Type          MutationType
+	Name          string
+	Previous      T
+	Value         T
+	Version       uint64
+	At            time.Time
 }
 
 // ActionEvent describes one completed action.

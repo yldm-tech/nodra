@@ -30,6 +30,15 @@ type ActionOptions[I any] struct {
 	QueueLimit    int
 	// Debounce delays LatestWins work per key until this interval after acceptance. Superseded inputs never start work. Zero preserves immediate scheduling; QueueAll rejects a positive delay.
 	Debounce time.Duration
+	Retry    RetryOptions
+}
+
+// RetryOptions enables bounded retries for an explicitly idempotent action. MaxAttempts includes the first run; zero disables retries. Backoff doubles between attempts and is capped by MaxBackoff.
+type RetryOptions struct {
+	MaxAttempts int
+	Backoff     time.Duration
+	MaxBackoff  time.Duration
+	Idempotent  bool
 }
 
 // AsyncState describes the latest run. Progress is between zero and one; Error is diagnostic text. Treat the action's status store as read-only.
@@ -65,6 +74,7 @@ type Task struct {
 	commitStarted  time.Time
 	commitFinished time.Time
 	finishedAt     time.Time
+	attempt        int
 }
 
 func (t *Task) Status() ReadOnly[AsyncState] { return t.state.ReadOnly() }
@@ -105,6 +115,26 @@ type AsyncAction[T, I, R any] struct {
 	pending     []*Task
 	active      int
 	changed     chan struct{}
+	aggregate   ActionMetrics
+}
+
+// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Duration totals include each run once; Retries counts additional work attempts.
+type ActionMetrics struct {
+	Accepted    uint64
+	Completed   uint64
+	Succeeded   uint64
+	Failed      uint64
+	Canceled    uint64
+	Retried     uint64
+	QueuePeak   int
+	DurationSum time.Duration
+	DurationMax time.Duration
+}
+
+func (a *AsyncAction[T, I, R]) Metrics() ActionMetrics {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.aggregate
 }
 
 func NewAsyncAction[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error) (*AsyncAction[T, I, R], error) {
@@ -112,7 +142,7 @@ func NewAsyncAction[T, I, R any](store *Store[T], name string, work func(context
 }
 
 func NewAsyncActionWithOptions[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error, options ActionOptions[I]) (*AsyncAction[T, I, R], error) {
-	if store == nil || work == nil || apply == nil || options.MaxConcurrent < 0 || options.QueueLimit < 0 || options.Policy > QueueAll || options.Debounce < 0 || (options.Policy == QueueAll && options.Debounce > 0) {
+	if store == nil || work == nil || apply == nil || options.MaxConcurrent < 0 || options.QueueLimit < 0 || options.Policy > QueueAll || options.Debounce < 0 || options.Retry.MaxAttempts < 0 || options.Retry.Backoff < 0 || options.Retry.MaxBackoff < 0 || (options.Policy == QueueAll && options.Debounce > 0) || (options.Retry.MaxAttempts > 0 && !options.Retry.Idempotent) {
 		return nil, ErrInvalidAction
 	}
 	if options.Policy == QueueAll && options.MaxConcurrent == 0 {
@@ -185,6 +215,10 @@ func (a *AsyncAction[T, I, R]) Run(ctx context.Context, input I) (*Task, error) 
 	a.latestByKey[key] = task
 	a.runs[task] = struct{}{}
 	a.pending = append(a.pending, task)
+	a.aggregate.Accepted++
+	if queued+1 > a.aggregate.QueuePeak {
+		a.aggregate.QueuePeak = queued + 1
+	}
 	a.signalLocked()
 	a.mu.Unlock()
 	// Notifications may reenter Run; the ID check prevents an older initialization from replacing a newer status.
@@ -240,9 +274,15 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 			return cause
 		}
 		a.markTime(&task.workStarted)
-		result, err := func() (R, error) {
-			defer a.markTime(&task.workFinished)
-			return a.work(task.ctx, input, func(progress float64) {
+		var result R
+		var err error
+		a.markTime(&task.workStarted)
+		attempts := max(1, a.options.Retry.MaxAttempts)
+		for attempt := 1; attempt <= attempts; attempt++ {
+			a.mu.Lock()
+			task.attempt = attempt
+			a.mu.Unlock()
+			result, err = a.work(task.ctx, input, func(progress float64) {
 				if math.IsNaN(progress) || math.IsInf(progress, 0) || task.ctx.Err() != nil {
 					return
 				}
@@ -254,7 +294,25 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 					task.cancel(err)
 				}
 			})
-		}()
+			if err == nil || attempt == attempts || context.Cause(task.ctx) != nil {
+				break
+			}
+			backoff := a.options.Retry.Backoff
+			for n := 1; n < attempt; n++ {
+				backoff *= 2
+			}
+			if a.options.Retry.MaxBackoff > 0 {
+				backoff = min(backoff, a.options.Retry.MaxBackoff)
+			}
+			timer := time.NewTimer(backoff)
+			select {
+			case <-task.ctx.Done():
+				timer.Stop()
+				err = context.Cause(task.ctx)
+			case <-timer.C:
+			}
+		}
+		a.markTime(&task.workFinished)
 		if cause := context.Cause(task.ctx); cause != nil {
 			return cause
 		}
@@ -328,6 +386,22 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 		_ = a.state.Close()
 	}
 	task.err = err
+	a.aggregate.Completed++
+	if err == nil {
+		a.aggregate.Succeeded++
+	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrClosed) {
+		a.aggregate.Canceled++
+	} else {
+		a.aggregate.Failed++
+	}
+	if task.attempt > 1 {
+		a.aggregate.Retried += uint64(task.attempt - 1)
+	}
+	duration := time.Since(task.event.Started)
+	a.aggregate.DurationSum += duration
+	if duration > a.aggregate.DurationMax {
+		a.aggregate.DurationMax = duration
+	}
 	close(task.done)
 	a.signalLocked()
 	a.mu.Unlock()

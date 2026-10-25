@@ -159,3 +159,51 @@ func TestEmbeddedAssetsAndLoopbackServerLifecycle(t *testing.T) {
 		t.Fatalf("Listen after close = %v", err)
 	}
 }
+
+func TestRemoteReadOnlyServerRejectsWrites(t *testing.T) {
+	i := New(Options{})
+	store := nodra.New(counterState{})
+	mustAttach(t, i, "counter", store)
+	fullURL, err := i.ListenRemoteReadOnly("127.0.0.1:0")
+	mustUpdate(t, err)
+	defer func() { _ = i.Close() }()
+	u, err := url.Parse(fullURL)
+	mustUpdate(t, err)
+	client := &http.Client{Timeout: time.Second}
+	requestURL := *u
+	requestURL.Path = "/api/snapshot"
+	requestURL.Fragment = ""
+	get, err := http.NewRequest(http.MethodGet, requestURL.String(), nil)
+	mustUpdate(t, err)
+	get.Header.Set("Authorization", "Bearer "+i.token)
+	response, err := client.Do(get)
+	mustUpdate(t, err)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("remote snapshot status = %d", response.StatusCode)
+	}
+	_ = response.Body.Close()
+	for _, path := range []string{"/api/clear", "/api/restore"} {
+		requestURL.Path = path
+		post, err := http.NewRequest(http.MethodPost, requestURL.String(), strings.NewReader(`{"storeId":"counter","state":{"count":7}}`))
+		mustUpdate(t, err)
+		post.Header.Set("Authorization", "Bearer "+i.token)
+		post.Header.Set("Content-Type", "application/json")
+		response, err := client.Do(post)
+		mustUpdate(t, err)
+		if response.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("remote %s status = %d", path, response.StatusCode)
+		}
+		_ = response.Body.Close()
+	}
+	if store.Get().Count != 0 {
+		t.Fatal("remote write changed state")
+	}
+}
+
+func TestRemoteReadOnlyRequiresRestoreDisabled(t *testing.T) {
+	i := New(Options{AllowRestore: true})
+	defer func() { _ = i.Close() }()
+	if _, err := i.ListenRemoteReadOnly("127.0.0.1:0"); err != ErrReadOnly {
+		t.Fatalf("remote restore option error = %v", err)
+	}
+}

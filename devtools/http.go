@@ -22,6 +22,28 @@ var web embed.FS
 // HTTP requests or referrers); the UI uses it as a bearer header for its API.
 // Only one server can run per inspector. Close detaches stores and stops it.
 func (i *Inspector) Listen() (string, error) {
+	return i.listen("127.0.0.1:0", false)
+}
+
+// ListenRemoteReadOnly starts an authenticated read-only inspector on addr.
+// Remote mode serves only GET snapshot and search requests: restore, clear and
+// every other write method are rejected. The caller is responsible for placing
+// TLS or another encrypted transport in front of a non-loopback listener.
+// Restore must be disabled in Options as an additional safety check.
+func (i *Inspector) ListenRemoteReadOnly(addr string) (string, error) {
+	if i == nil {
+		return "", ErrClosed
+	}
+	i.mu.Lock()
+	allowRestore := i.options.AllowRestore
+	i.mu.Unlock()
+	if allowRestore {
+		return "", ErrReadOnly
+	}
+	return i.listen(addr, true)
+}
+
+func (i *Inspector) listen(addr string, remote bool) (string, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	if i.closed {
@@ -30,11 +52,16 @@ func (i *Inspector) Listen() (string, error) {
 	if i.server != nil {
 		return "", errors.New("nodra devtools: already listening")
 	}
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	network := "tcp4"
+	if remote {
+		network = "tcp"
+	}
+	listener, err := net.Listen(network, addr)
 	if err != nil {
 		return "", err
 	}
 	i.server = &http.Server{Handler: i.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+	i.remote = remote
 	i.done = make(chan struct{})
 	go func() {
 		defer close(i.done)
@@ -43,25 +70,37 @@ func (i *Inspector) Listen() (string, error) {
 	return "http://" + listener.Addr().String() + "/#" + i.token, nil
 }
 
-// Handler serves the UI and authenticated API. Listen is the recommended entry
-// point; custom servers must also bind only to loopback. Tokens are per inspector.
+// Handler serves the UI and authenticated API. Listen is the recommended local
+// entry point; ListenRemoteReadOnly enables the restricted remote transport.
+// Tokens are per inspector.
 func (i *Inspector) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
-		host, _, err := net.SplitHostPort(r.Host)
-		if err != nil {
-			host = r.Host
+		i.mu.Lock()
+		remote := i.remote
+		i.mu.Unlock()
+		if !remote {
+			host, _, err := net.SplitHostPort(r.Host)
+			if err != nil {
+				host = r.Host
+			}
+			if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+				http.Error(w, "loopback host required", http.StatusForbidden)
+				return
+			}
 		}
-		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
-			http.Error(w, "loopback host required", http.StatusForbidden)
-			return
-		}
-		if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+r.Host {
-			http.Error(w, "same origin required", http.StatusForbidden)
-			return
+		if origin := r.Header.Get("Origin"); origin != "" {
+			expected := "http://" + r.Host
+			if r.TLS != nil || (remote && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")) {
+				expected = "https://" + r.Host
+			}
+			if origin != expected {
+				http.Error(w, "same origin required", http.StatusForbidden)
+				return
+			}
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			supplied := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -98,6 +137,14 @@ func (i *Inspector) Handler() http.Handler {
 }
 
 func (i *Inspector) serveAPI(w http.ResponseWriter, r *http.Request) {
+	i.mu.Lock()
+	remote := i.remote
+	i.mu.Unlock()
+	if remote && r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "read-only inspector", http.StatusMethodNotAllowed)
+		return
+	}
 	method := http.MethodGet
 	if r.URL.Path == "/api/restore" || r.URL.Path == "/api/clear" || r.URL.Path == "/api/capture" {
 		method = http.MethodPost

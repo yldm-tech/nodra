@@ -27,6 +27,8 @@ responses are not cached; the UI loads only its embedded local CSS/JavaScript.
 Close detaches all subscriptions and shuts down the listener. Each attach also
 returns an idempotent detach function. IDs must be unique among current stores.
 
+For a controlled remote read-only session, use `ListenRemoteReadOnly("host:port")` with `AllowRestore` left false. Remote mode accepts authenticated GET snapshot/search requests and rejects restore, clear and every other write method. The capability token is still sent as a bearer header, so put a non-loopback listener behind TLS or another encrypted transport and restrict its network access. `ListenRemoteReadOnly` refuses an inspector configured with `AllowRestore: true`.
+
 ## Inspecting state and events
 
 - The sidebar lists heterogeneous stores and their current source versions.
@@ -107,6 +109,8 @@ RedactMetadata: func(id string, m devtools.Metadata) (devtools.Metadata, error) 
 ```
 
 Metadata redaction runs outside inspector locks and must be concurrency-safe. It covers initial/catch-up state errors, mutation/action names and errors, task snapshots at attachment/resume, pending progress payloads, the timeline, Tasks, incremental/history APIs and full export. Callback errors and panics discard all original text and retain only `metadata redaction failed`; callback errors are never exported. Numeric action/run IDs and generations remain intact for correlation. Metadata-only redaction does not disable restoration because it does not alter state. Store IDs are not filtered: supply public labels. Session URLs and exported debug snapshots should stay with the intended development session. No automatic publishing or external telemetry is performed.
+
+Applications can add bounded custom diagnostics with `Inspector.Record`. Custom event data must be valid JSON and follows the same retention and metadata redaction rules. `Inspector.Search` uses an in-memory token index over retained event kind/name/key/error fields; evicted and cleared sequences are removed from the index. This index is local to the inspector and is not an audit log.
 
 ## Demo and browser verification
 

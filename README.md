@@ -68,6 +68,18 @@ stop := nodra.Invalidate(label, window)
 
 Nest Combine calls for more inputs. Each source version advances independently: combinations converge to the latest observed inputs but are not cross-Store transactions. A diamond graph may emit an intermediate combination before both branches catch up. Keep values that require atomic updates in one Store. Constructors catch registration gaps; obsolete computations do not overwrite newer accepted results. Projectors and comparators must be pure and concurrency-safe, and derived reference values remain read-only. `DeriveProjection` can start a derived chain without full-source subscription clones. Closing a derived value detaches its inputs and freezes its last value; downstream owners still close their own derived values.
 
+For a transaction spanning more than two stores, prepare typed updates with `AtomicUpdate` and commit them with `AtomicGroup`:
+
+```go
+err := nodra.AtomicGroup(
+    nodra.AtomicUpdate(user, func(value *User) error { value.Active = true; return nil }),
+    nodra.AtomicUpdate(permissions, func(value *Permissions) error { value.Edit = true; return nil }),
+    nodra.AtomicUpdate(settings, func(value *Settings) error { value.Revision++; return nil }),
+)
+```
+
+All candidates are prepared before any store changes, and the group rolls back on an error or panic. Notifications carry one transaction ID and run after every participating store is visible. Do not call Store methods from an `AtomicUpdate` callback; use its candidate pointer.
+
 ## Immediate field editing
 
 `BindField` creates a small immediate binding; its `Edit` callback renders against a local value outside Store locks and commits only when the control reports a change:
@@ -151,6 +163,8 @@ action, err := nodra.NewAsyncActionWithOptions(store, "load item", work, apply,
 LatestWins replaces work only for the same key; different keys are independent. Use `QueueAll` for work that must retain every accepted input. QueueAll defaults to one worker for FIFO starts/commits; with more workers, starts are FIFO and commits follow completion order. LatestWins with zero MaxConcurrent preserves unbounded legacy behavior. Bounded or debounced actions default to 64 pending entries, and a full queue returns `ErrQueueFull` without canceling existing work. A superseded queued entry can be replaced even when that queue is full. Canceled work that has not returned still occupies its concurrency slot. Run accepts input without waiting for a work slot; canceled queued tasks finish without executing work.
 
 Set `ActionOptions.Debounce` to delay `LatestWins` work until a quiet interval after acceptance for its key. Replacing an input cancels its timer and reports `superseded` without executing work. Different keys have independent deadlines. Waiting for debounce does not occupy a worker slot, and eligible keys can start while another key is still waiting. Queue limits include live debounced inputs; cancellation and Close drain waiting tasks. A positive Debounce with QueueAll returns `ErrInvalidAction`, because QueueAll retains every input. Zero preserves existing immediate scheduling. The workbench search uses a 150 ms debounce.
+
+Retries are opt-in through `ActionOptions.Retry` and require `Idempotent: true`. `MaxAttempts` includes the first work call; exponential backoff is capped by `MaxBackoff`. Only the work callback is retried; the state apply callback runs once after a successful result. `TaskMetrics.Attempts` reports one run's attempts, while `action.Metrics()` aggregates accepted/completed/succeeded/failed/canceled runs, retries, queue peak and duration totals.
 
 `Task.Status()` exposes that task's key, queued/running/terminal phase, progress and diagnostic error. The status Store closes after terminal status. The action-level Status describes the most recently accepted run, which is not a count of all active work. Use `ActiveTasks()` or `TaskSnapshot()` on the source for current work. Do not wait for another queued task synchronously from work, hooks or subscribers of the same bounded action; that can exhaust its own work slots. Progress may be reported concurrently during work; stop reporting when work returns.
 
@@ -240,12 +254,14 @@ tasks.Update(func(value *[]Task) {
 - Action lifecycle hooks: before, after, and error
 - Nested `Batch` notification groups that publish one final snapshot
 - `Transaction` for one serialized, fallible mutation
+- `Atomic2`, `AtomicUpdate`, and `AtomicGroup` for cross-store visibility boundaries
 - `Track` / `TrackWith` history with bounded undo/redo, recording filters and cross-frame edit groups
 - `Persistence[T]` with pluggable storage and codec interfaces
 - Ready-to-use `FileStorage` and `JSONCodec[T]` with atomic file replacement
 - `VersionedJSONCodec[T]` with sequential schema migrations and explicit legacy JSON support
 - `AutoSaveWithErrors` for observable persistence failures
 - `AutoSaveAsync` for debounced, coalesced writes with `Flush`, `Close` and an error stream
+- `AESGCMCodec` and key-provider interfaces for authenticated encrypted persistence with key rotation
 - Context-bound, bounded `Watch` streams that close with the store
 - `Invalidate` and `InvalidateSelector` for window-bound redraw subscriptions with automatic cleanup
 - Optional DevTools with a local browser inspector, mutation/action timeline,
@@ -326,6 +342,8 @@ successful migration is written by a subsequent `Save` or autosave.
 
 Enable `FileStorage{Path: path, Backup: true}` to write an independently replaced `path + ".bak"` copy after successful primary replacement. Backup I/O errors are returned; the primary may already have been saved when a backup fails. The two files are not one transaction. Keep one Persistence writer per destination, and reserve its `.bak` path for this backup. Applications must surface save errors rather than assume both files were updated.
 
+Set `FileStorage.Durable: true` to sync the containing directory after each rename. This adds filesystem latency but closes the rename-directory-entry crash window on platforms/filesystems that support directory fsync. Use `AESGCMCodec` around an inner codec when state must be encrypted; the envelope stores an algorithm, key ID, nonce and authenticated ciphertext, never plaintext. Add a new key to a `KeyProvider`, switch `Current`, then save to rotate. Historical key IDs remain readable until removed by the application. Nodra does not manage keychains or secret storage.
+
 After a failed startup Load, stop and present that error before starting autosave. `persistence.LoadBackup(ctx)` explicitly validates and loads the backup into memory without rewriting either file. A later Save intentionally persists the recovered/current state. No silent fallback discards a corrupt original. Stores without a backup-capable backend return `ErrNoBackup`. Try `go run ./examples/persistent -file /path/to/state.json -recover-backup` to inspect recovery without modifying the files.
 
 For multiple cooperating instances, explicitly enable content-conflict detection:
@@ -342,6 +360,8 @@ if err := persistence.Save(ctx); errors.Is(err, nodra.ErrFileConflict) {
 The constructor observes current primary bytes (or absence) as the baseline without loading Store state. `CheckedFileStorage` checks a SHA-256 fingerprint under an OS advisory lock before replacing the file. Independent instances/processes using this backend coordinate through `path + ".lock"`; reserve that sidecar and never remove it while instances may be active. A `FileConflictError` carries expected/actual fingerprints without file contents. Rejected saves preserve primary and backup bytes, and retries keep failing until the application explicitly loads/reconciles or chooses another destination. `Load` acknowledges current primary bytes, including absence while returning `os.ErrNotExist`; decode/validation errors must still stop startup autosave. `LoadBackup` does not acknowledge changed primary content. A backup failure after primary replacement acknowledges that primary so retry can complete the backup without a false conflict. Async writers surface conflicts through Errors/Flush/Close and remain pending.
 
 All writers must opt in for coordinated replacement. Plain FileStorage and external editors do not honor the lock: changes completed before the check are detected, but an uncooperative concurrent writer can race the check and replacement. This is not an atomic compare-and-swap against arbitrary filesystem writers. Use regular local files and one canonical destination; primary symlinks/nonregular files are rejected, parent directory aliases are canonicalized, and hard-link aliases/network filesystem locking are outside the contract. Equal-content replacements and changes reverted before the next check do not count as content conflicts. The default FileStorage remains unchanged.
+
+`Atomic2` provides a visibility boundary for two different stores. Both values commit or both roll back; notifications carry a shared transaction ID after commit. Readers block while the transaction callback runs, so derived UI can avoid observing an intermediate pair.
 
 ## Write-behind persistence
 
@@ -395,6 +415,8 @@ url, err := inspector.Listen() // random loopback port; open the full session UR
 ```
 
 The browser shows multiple stores, live state, bounded mutation/action history, action durations and errors, before/after diffs, filtering and JSON export. Set `AllowRestore: true` explicitly to enable typed JSON editing and restoring a retained snapshot. Restoration calls Set and emits new events; it does not reverse external action effects. `Redact` filters state before capture and disables restoration. `RedactMetadata` separately filters names, task keys and error text before timeline/task retention, pending progress and export. Metadata callback failures discard the original text and use a fixed diagnostic. Store IDs must be public labels. No external assets, services or frontend build step are required.
+
+For a controlled remote read-only session, call `inspector.ListenRemoteReadOnly("host:port")` with the default options. It exposes authenticated GET inspection only and rejects restore and clear; place a non-loopback listener behind TLS or another encrypted transport.
 
 Try the [interactive example](examples/devtools/main.go) and see the
 [DevTools guide](docs/devtools.md) for lifecycle, redaction and browser tests:

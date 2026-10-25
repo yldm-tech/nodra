@@ -25,6 +25,8 @@ type FileStorage struct {
 	Perm os.FileMode
 	// Backup writes an independent Path+".bak" copy after each successful primary replacement. A backup failure is returned even though the primary may already contain the new state. Use one Persistence writer per destination.
 	Backup bool
+	// Durable syncs the containing directory after each rename. This makes the file name update durable across a crash on filesystems that support directory fsync. It may add latency and is opt-in for compatibility.
+	Durable bool
 }
 
 func (f FileStorage) LoadBackup(ctx context.Context) ([]byte, error) {
@@ -89,11 +91,16 @@ func (f FileStorage) save(ctx context.Context, data []byte, primarySaved func())
 	if err = os.Rename(name, f.Path); err != nil {
 		return fmt.Errorf("nodra: replace %s: %w", f.Path, err)
 	}
+	if f.Durable {
+		if err = syncDirectory(dir); err != nil {
+			return fmt.Errorf("nodra: sync %s after replace: %w", dir, err)
+		}
+	}
 	if primarySaved != nil {
 		primarySaved()
 	}
 	if f.Backup {
-		if err := (FileStorage{Path: f.Path + ".bak", Perm: f.Perm}).Save(ctx, data); err != nil {
+		if err := (FileStorage{Path: f.Path + ".bak", Perm: f.Perm, Durable: f.Durable}).Save(ctx, data); err != nil {
 			return fmt.Errorf("nodra: primary saved, backup failed: %w", err)
 		}
 	}
