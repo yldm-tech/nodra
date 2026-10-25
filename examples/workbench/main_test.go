@@ -144,3 +144,38 @@ func TestWorkbenchStorageFailureAndSearchButton(t *testing.T) {
 		t.Fatalf("results missing: %v", tester.Texts())
 	}
 }
+
+func TestWorkbenchLanguageCatalogAndPersistence(t *testing.T) {
+	if got := translationsFor(languageChinese); got.title != "工作区搜索" || got.saveSettings != "保存设置" {
+		t.Fatalf("Chinese catalog = %+v", got)
+	}
+	if got := normalizeLanguage("unknown"); got != languageEnglish {
+		t.Fatalf("unknown language = %q", got)
+	}
+	root := t.TempDir()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	app, err := newWorkbench(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.close()
+	app.draft.Language = languageChinese
+	tester := ui.NewTester(app.view, 960, 640)
+	if !tester.HasText("工作区搜索") || !tester.HasText("搜索设置") || !tester.HasText("保存设置") {
+		t.Fatalf("Chinese view text: %v", tester.Texts())
+	}
+	if err := tester.Click("保存设置"); err != nil {
+		t.Fatal(err)
+	}
+	if err := wait(t, app.saveRun); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := newWorkbench(root, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloaded.close()
+	if reloaded.settings.Get().Language != languageChinese {
+		t.Fatalf("persisted language = %q", reloaded.settings.Get().Language)
+	}
+}
