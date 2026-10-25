@@ -174,6 +174,8 @@ Retries are opt-in through `ActionOptions.Retry` and require `Idempotent: true`.
 
 `AsyncAction.ExportMetrics` exposes the current aggregate through the dependency-free `MetricsSink` interface. Implement that one method to bridge Nodra into Prometheus, OpenTelemetry, logs, or an existing telemetry system without adding an SDK to the core module.
 
+Use `SubscribeMetrics` when the exporter should receive a fresh aggregate after each terminal task. Callbacks run outside action locks, are safe to unsubscribe repeatedly, and a callback panic is contained so it cannot strand task completion.
+
 ## Owned projections for large state
 
 `Get` and ordinary selector subscriptions preserve the Store's full-state cloning policy. For hot reads, `Select` borrows read-only state and copies only the projection you return:
