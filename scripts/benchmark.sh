@@ -43,7 +43,7 @@ for sample in {1..10}; do
   (cd "$benchmark_base" && go test -run '^$' -bench=. -benchmem -benchtime=100ms -count=1 -cpu=2 ./internal/perfbench) >> "$benchmark_results/base.txt"
   (cd "$benchmark_candidate" && go test -run '^$' -bench=. -benchmem -benchtime=100ms -count=1 -cpu=2 ./internal/perfbench) >> "$benchmark_results/candidate.txt"
 done
-(cd "$benchmark_candidate" && go test -run '^$' -bench='Benchmark(ActionScheduling|DerivedProjectionPipeline|CombinedValues|InspectorTaskProgress)$' -benchmem -benchtime=100ms -count=10 -cpu=2 . ./devtools) > "$benchmark_results/features.txt"
+(cd "$benchmark_candidate" && go test -run '^$' -bench='Benchmark(ActionScheduling|DerivedProjectionPipeline|CombinedValues|InspectorTaskProgress)$' -benchmem -benchtime=100ms -count=10 -cpu=2 ./internal/core ./devtools) > "$benchmark_results/features.txt"
 "$benchmark_tool" "$benchmark_results/base.txt" "$benchmark_results/candidate.txt" > "$benchmark_results/comparison.txt"
 "$benchmark_tool" "$benchmark_results/features.txt" > "$benchmark_results/features-summary.txt"
 cat "$benchmark_results/comparison.txt"

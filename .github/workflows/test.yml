@@ -74,8 +74,8 @@ jobs:
         run: CGO_ENABLED=0 GOOS=windows go build ./...
       - if: runner.os == 'Linux'
         run: |
-          go test -run '^$' -fuzz=FuzzVersionedJSONDecode -fuzztime=10s -parallel=2 .
-          go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=10s -parallel=2 .
+          go test -run '^$' -fuzz=FuzzVersionedJSONDecode -fuzztime=10s -parallel=2 ./internal/core
+          go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=10s -parallel=2 ./internal/core
           go test -run '^$' -bench=. -benchtime=1x ./...
 
   lint:
