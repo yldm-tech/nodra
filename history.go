@@ -159,7 +159,7 @@ func (h *History[T]) travel(undo bool) error {
 	var targetBytes uint64
 	// Choose and commit the history step under the source write lock. Stack changes happen only after the store's commit clone has succeeded, before any notifications can reenter history or a concurrent writer can commit.
 	return h.store.updateCommitted("", MutationDirect, func(value *T) error {
-		current := Snapshot[T]{*value, h.store.version}
+		current := Snapshot[T]{Value: *value, Version: h.store.version, TransactionID: h.store.transactionID}
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if h.closed {

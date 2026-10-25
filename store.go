@@ -16,9 +16,13 @@ var ErrClosed = errors.New("nodra: store is closed")
 var storeTransactionMu sync.RWMutex
 var nextTransactionID atomic.Uint64
 
+// Snapshot is a source value accepted at Version. TransactionID is non-zero
+// when the publication belongs to Atomic2 or AtomicGroup; derived sources
+// propagate it so one transaction can be settled before downstream delivery.
 type Snapshot[T any] struct {
-	Value   T
-	Version uint64
+	Value         T
+	Version       uint64
+	TransactionID uint64
 }
 type listener[T any] struct {
 	fn       func(Snapshot[T])
@@ -35,6 +39,7 @@ type Store[T any] struct {
 	value, initial    T
 	clone             func(T) T
 	version, nextID   uint64
+	transactionID     uint64
 	listeners         map[uint64]listener[T]
 	mutationListeners map[uint64]func(Mutation[T])
 	actionListeners   map[uint64]func(ActionEvent)
@@ -83,7 +88,7 @@ func (s *Store[T]) Snapshot() Snapshot[T] {
 	defer storeTransactionMu.RUnlock()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return Snapshot[T]{s.copy(s.value), s.version}
+	return Snapshot[T]{Value: s.copy(s.value), Version: s.version, TransactionID: s.transactionID}
 }
 func (s *Store[T]) Get() T   { return s.Snapshot().Value }
 func (s *Store[T]) State() T { return s.Get() }
@@ -153,6 +158,7 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 		// Copy on commit too: a callback may retain its candidate or a caller
 		// may retain references passed to Set.
 		s.value = s.copy(next)
+		s.transactionID = 0
 		if s.batch > 0 {
 			s.dirty = true
 			if s.batchType == "" {
@@ -224,6 +230,8 @@ func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error)
 	first.version++
 	second.version++
 	transactionID := nextTransactionID.Add(1)
+	first.transactionID = transactionID
+	second.transactionID = transactionID
 	firstSnapshot, firstListeners, firstMutations := first.publishLocked(firstBefore, MutationTransaction, "atomic")
 	secondSnapshot, secondListeners, secondMutations := second.publishLocked(secondBefore, MutationTransaction, "atomic")
 	locks[1].unlock()
@@ -231,15 +239,21 @@ func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error)
 	storeTransactionMu.Unlock()
 	transactionHeld = false
 	locked = false
-	first.notify(firstListeners, firstSnapshot)
-	second.notify(secondListeners, secondSnapshot)
-	first.notifyMutationWithTransaction(firstMutations, Mutation[A]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: firstBefore, Value: firstSnapshot.Value, Version: firstSnapshot.Version, At: time.Now()})
-	second.notifyMutationWithTransaction(secondMutations, Mutation[B]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: secondBefore, Value: secondSnapshot.Value, Version: secondSnapshot.Version, At: time.Now()})
+	runTransactionDispatch(transactionID, []func(){
+		func() { first.notify(firstListeners, firstSnapshot) },
+		func() { second.notify(secondListeners, secondSnapshot) },
+		func() {
+			first.notifyMutationWithTransaction(firstMutations, Mutation[A]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: firstBefore, Value: firstSnapshot.Value, Version: firstSnapshot.Version, At: time.Now()})
+		},
+		func() {
+			second.notifyMutationWithTransaction(secondMutations, Mutation[B]{TransactionID: transactionID, Type: MutationTransaction, Name: "atomic", Previous: secondBefore, Value: secondSnapshot.Value, Version: secondSnapshot.Version, At: time.Now()})
+		},
+	})
 	return nil
 }
 
 func (s *Store[T]) publishLocked(before T, kind MutationType, name string) (Snapshot[T], []listener[T], []func(Mutation[T])) {
-	return Snapshot[T]{s.value, s.version}, s.listenersCopyLocked(), s.mutationListenersCopyLocked()
+	return Snapshot[T]{Value: s.value, Version: s.version, TransactionID: s.transactionID}, s.listenersCopyLocked(), s.mutationListenersCopyLocked()
 }
 
 func (s *Store[T]) Batch(fn func()) error {
@@ -270,6 +284,7 @@ func (s *Store[T]) Batch(fn func()) error {
 		s.batchType = ""
 		s.batchName = ""
 		s.version++
+		s.transactionID = 0
 		snapshot, listeners, mutations := s.publishLocked(before, kind, name)
 		s.mu.Unlock()
 		s.notify(listeners, snapshot)
@@ -349,7 +364,7 @@ func (s *Store[T]) SubscribeWith(options SubscribeOptions[T], fn func(Snapshot[T
 	s.nextID++
 	id := s.nextID
 	s.listeners[id] = listener[T]{fn: wrapped}
-	initial := Snapshot[T]{s.value, s.version}
+	initial := Snapshot[T]{Value: s.value, Version: s.version, TransactionID: s.transactionID}
 	s.mu.Unlock()
 	var once sync.Once
 	stop := func() { once.Do(func() { s.mu.Lock(); delete(s.listeners, id); s.mu.Unlock() }) }
@@ -360,7 +375,7 @@ func (s *Store[T]) SubscribeWith(options SubscribeOptions[T], fn func(Snapshot[T
 				stop()
 			}
 		}()
-		wrapped(Snapshot[T]{s.copy(initial.Value), initial.Version})
+		wrapped(Snapshot[T]{Value: s.copy(initial.Value), Version: initial.Version, TransactionID: initial.TransactionID})
 		initialized = true
 	}
 	return stop
@@ -401,7 +416,7 @@ func (s *Store[T]) notify(listeners []listener[T], snapshot Snapshot[T]) {
 		if !sub.borrowed {
 			value = s.copy(value)
 		}
-		sub.fn(Snapshot[T]{value, snapshot.Version})
+		sub.fn(Snapshot[T]{Value: value, Version: snapshot.Version, TransactionID: snapshot.TransactionID})
 	}
 }
 func (s *Store[T]) notifyMutation(listeners []func(Mutation[T]), mutation Mutation[T]) {
