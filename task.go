@@ -100,22 +100,24 @@ func (t *Task) Wait(ctx context.Context) error {
 
 // AsyncAction runs work outside the Store lock with an explicit commit policy. The default accepts only the latest uncanceled run per key. Input and result ownership follows Store's policy; copy mutable inputs before Run. Work must honor its context. Progress, status subscribers and action hooks can run on background goroutines.
 type AsyncAction[T, I, R any] struct {
-	store       *Store[T]
-	name        string
-	work        func(context.Context, I, func(float64)) (R, error)
-	apply       func(*T, R) error
-	state       *Store[AsyncState]
-	mu          sync.Mutex
-	runs        map[*Task]struct{}
-	next        uint64
-	closed      bool
-	closedCh    chan struct{}
-	options     ActionOptions[I]
-	latestByKey map[string]*Task
-	pending     []*Task
-	active      int
-	changed     chan struct{}
-	aggregate   ActionMetrics
+	store            *Store[T]
+	name             string
+	work             func(context.Context, I, func(float64)) (R, error)
+	apply            func(*T, R) error
+	state            *Store[AsyncState]
+	mu               sync.Mutex
+	runs             map[*Task]struct{}
+	next             uint64
+	closed           bool
+	closedCh         chan struct{}
+	options          ActionOptions[I]
+	latestByKey      map[string]*Task
+	pending          []*Task
+	active           int
+	changed          chan struct{}
+	aggregate        ActionMetrics
+	metricsListeners map[uint64]func(ActionMetrics)
+	nextMetricsID    uint64
 }
 
 // ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Duration totals include each run once; Retries counts additional work attempts.
@@ -151,7 +153,7 @@ func NewAsyncActionWithOptions[T, I, R any](store *Store[T], name string, work f
 	if options.QueueLimit == 0 && (options.MaxConcurrent > 0 || options.Debounce > 0) {
 		options.QueueLimit = 64
 	}
-	a := &AsyncAction[T, I, R]{store: store, name: name, work: work, apply: apply, state: New(AsyncState{Name: name}), runs: make(map[*Task]struct{}), closedCh: make(chan struct{})}
+	a := &AsyncAction[T, I, R]{store: store, name: name, work: work, apply: apply, state: New(AsyncState{Name: name}), runs: make(map[*Task]struct{}), metricsListeners: make(map[uint64]func(ActionMetrics)), closedCh: make(chan struct{})}
 	a.options = options
 	a.latestByKey = make(map[string]*Task)
 	a.changed = make(chan struct{})
@@ -402,9 +404,17 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	if duration > a.aggregate.DurationMax {
 		a.aggregate.DurationMax = duration
 	}
+	metrics := a.aggregate
+	listeners := make([]func(ActionMetrics), 0, len(a.metricsListeners))
+	for _, listener := range a.metricsListeners {
+		listeners = append(listeners, listener)
+	}
 	close(task.done)
 	a.signalLocked()
 	a.mu.Unlock()
+	for _, listener := range listeners {
+		_ = taskBoundary(func() error { listener(metrics); return nil })
+	}
 }
 
 func taskPhase(err error) TaskPhase {
