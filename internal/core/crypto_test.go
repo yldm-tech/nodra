@@ -62,3 +62,25 @@ func TestAESGCMCodecDetectsTamperingAndMissingKey(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestAESGCMCodecRejectsTypedNilDependencies(t *testing.T) {
+	keys, err := NewMemoryKeyProvider("key", []byte("01234567890123456789012345678901"))
+	requireNoError(t, err)
+	var inner *jsonCodec[int]
+	codec := AESGCMCodec[int]{Inner: inner, Keys: keys}
+	if _, err := codec.Encode(1); !errors.Is(err, ErrInvalidPersistence) {
+		t.Fatalf("typed-nil inner encode error = %v, want ErrInvalidPersistence", err)
+	}
+	if _, err := codec.Decode(nil); !errors.Is(err, ErrInvalidPersistence) {
+		t.Fatalf("typed-nil inner decode error = %v, want ErrInvalidPersistence", err)
+	}
+
+	var typedNilKeys *MemoryKeyProvider
+	codec = AESGCMCodec[int]{Inner: jsonCodec[int]{}, Keys: typedNilKeys}
+	if _, err := codec.Encode(1); !errors.Is(err, ErrInvalidPersistence) {
+		t.Fatalf("typed-nil keys encode error = %v, want ErrInvalidPersistence", err)
+	}
+	if _, err := codec.Decode(nil); !errors.Is(err, ErrInvalidPersistence) {
+		t.Fatalf("typed-nil keys decode error = %v, want ErrInvalidPersistence", err)
+	}
+}

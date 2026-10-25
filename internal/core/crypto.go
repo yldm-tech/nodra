@@ -92,7 +92,7 @@ type encryptedEnvelope struct {
 }
 
 func (c AESGCMCodec[T]) Encode(value T) ([]byte, error) {
-	if c.Inner == nil || c.Keys == nil {
+	if isNilInterface(c.Inner) || isNilInterface(c.Keys) {
 		return nil, ErrInvalidPersistence
 	}
 	keyID, key, err := c.Keys.Current()
@@ -121,7 +121,7 @@ func (c AESGCMCodec[T]) Encode(value T) ([]byte, error) {
 
 func (c AESGCMCodec[T]) Decode(data []byte) (T, error) {
 	var zero T
-	if c.Inner == nil || c.Keys == nil {
+	if isNilInterface(c.Inner) || isNilInterface(c.Keys) {
 		return zero, ErrInvalidPersistence
 	}
 	var envelope encryptedEnvelope

@@ -50,7 +50,7 @@ type AsyncPersistence[T any] struct {
 // Parent cancellation and store closure stop the worker without a guaranteed
 // drain. Storage.Save must respect context cancellation to bound shutdown time.
 func (p *Persistence[T]) AutoSaveAsync(ctx context.Context, options AsyncOptions) (*AsyncPersistence[T], error) {
-	if p == nil || p.store == nil || p.storage == nil || p.codec == nil || options.Debounce < 0 {
+	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) || options.Debounce < 0 {
 		return nil, ErrInvalidPersistence
 	}
 	if ctx == nil {

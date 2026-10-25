@@ -108,7 +108,7 @@ func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
 func (p *Persistence[T]) LoadBackup(ctx context.Context) error { return p.load(ctx, true) }
 
 func (p *Persistence[T]) load(ctx context.Context, backup bool) error {
-	if p == nil || p.store == nil || p.storage == nil || p.codec == nil {
+	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) {
 		return ErrInvalidPersistence
 	}
 	if ctx == nil {
@@ -150,7 +150,7 @@ func (p *Persistence[T]) Save(ctx context.Context) error {
 // save returns the version actually written, rather than a version sampled
 // before waiting on another save. Async flush barriers use that acknowledgement.
 func (p *Persistence[T]) save(ctx context.Context) (uint64, error) {
-	if p == nil || p.store == nil || p.storage == nil || p.codec == nil {
+	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) {
 		return 0, ErrInvalidPersistence
 	}
 	if ctx == nil {
