@@ -100,3 +100,15 @@ func TestMemoryKeyProviderNilReceiver(t *testing.T) {
 		t.Fatalf("Get error = %v, want ErrInvalidKey", err)
 	}
 }
+
+type emptyIDKeyProvider struct{ key []byte }
+
+func (p emptyIDKeyProvider) Current() (string, []byte, error) { return "", p.key, nil }
+func (p emptyIDKeyProvider) Get(string) ([]byte, error)       { return p.key, nil }
+
+func TestAESGCMCodecRejectsEmptyCurrentKeyID(t *testing.T) {
+	codec := AESGCMCodec[int]{Inner: JSONCodec[int]{}, Keys: emptyIDKeyProvider{key: []byte("01234567890123456789012345678901")}}
+	if _, err := codec.Encode(1); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("empty key ID error = %v, want ErrInvalidKey", err)
+	}
+}
