@@ -51,6 +51,9 @@ func (p *MemoryKeyProvider) Add(id string, key []byte) error {
 	return nil
 }
 func (p *MemoryKeyProvider) SetCurrent(id string) error {
+	if p == nil {
+		return ErrInvalidKey
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, ok := p.keys[id]; !ok {
@@ -60,6 +63,9 @@ func (p *MemoryKeyProvider) SetCurrent(id string) error {
 	return nil
 }
 func (p *MemoryKeyProvider) Current() (string, []byte, error) {
+	if p == nil {
+		return "", nil, ErrInvalidKey
+	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	key, ok := p.keys[p.current]
@@ -69,6 +75,9 @@ func (p *MemoryKeyProvider) Current() (string, []byte, error) {
 	return p.current, append([]byte(nil), key...), nil
 }
 func (p *MemoryKeyProvider) Get(id string) ([]byte, error) {
+	if p == nil {
+		return nil, ErrInvalidKey
+	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	key, ok := p.keys[id]
