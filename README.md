@@ -263,7 +263,7 @@ tasks.Update(func(value *[]Task) {
 - `Create`, `Define`, `State`, `Patch`, and `Reset` aliases for familiar Pinia/Zustand workflows
 - Store IDs and independent named store instances
 - Action lifecycle hooks: before, after, and error
-- Nested `Batch` notification groups that publish one final snapshot
+- Nested `Batch` / `BatchErr` notification groups that publish one final snapshot
 - `Transaction` for one serialized, fallible mutation
 - `Atomic2`, `AtomicUpdate`, and `AtomicGroup` for cross-store visibility boundaries
 - `Track` / `TrackWith` history with bounded undo/redo, recording filters and cross-frame edit groups
@@ -392,7 +392,7 @@ err = writer.Close(shutdownCtx)
 
 The writer schedules the current state once at startup. `Flush` waits for the version visible at the call; canceling one flush wait leaves the worker running. Failed writes stay pending and retry on the next update or flush. `Errors()` is a bounded stream for background failures; `Flush` and `Close` return errors directly. `Close` stops observing, attempts the final flush, and stops even on failure. Retry a failed shutdown write with `persistence.Save` and a fresh context.
 
-`writer.Status()` returns an observable `ReadOnly[PersistenceState]` for UI labels and MyGo invalidation. `RequestedVersion` is the newest requested source version and `SavedVersion` is this writer's durable acknowledgement; `HasSaved` distinguishes unsaved version zero. `Pending`, `Saving`, `Error` and `Closed` distinguish waiting, active I/O, failure and shutdown. Pending stays true if shutdown leaves changes unsaved, and retry clears the displayed failure while saving. Revision prevents delayed publishers from replacing newer status. Subscribers run synchronously outside writer locks; do not call Flush or Close from the writer's own status callbacks. Subscriber panics cannot terminate the worker. Writes made separately through `Persistence.Save` or another instance are outside this writer's acknowledgement.
+`writer.Status()` returns an observable `ReadOnly[PersistenceState]` for UI labels and MyGo invalidation. `RequestedVersion` is the newest requested source version and `SavedVersion` is this writer's durable acknowledgement; `HasSaved` distinguishes unsaved version zero. `Pending`, `Saving`, `Error` and `Closed` distinguish waiting, active I/O, failure and shutdown. Pending stays true if shutdown leaves changes unsaved, and retry clears the displayed failure while saving. Revision prevents delayed publishers from replacing newer status. Status publications are serialized outside writer locks, so subscriber completion order follows revisions; do not call Flush or Close from the writer's own status callbacks. Subscriber panics cannot terminate the worker. Writes made separately through `Persistence.Save` or another instance are outside this writer's acknowledgement.
 
 Parent cancellation and store closure stop the worker without a guaranteed drain.
 
