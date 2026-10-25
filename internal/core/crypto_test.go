@@ -84,3 +84,19 @@ func TestAESGCMCodecRejectsTypedNilDependencies(t *testing.T) {
 		t.Fatalf("typed-nil keys decode error = %v, want ErrInvalidPersistence", err)
 	}
 }
+
+func TestMemoryKeyProviderNilReceiver(t *testing.T) {
+	var provider *MemoryKeyProvider
+	if err := provider.Add("key", []byte("01234567890123456789012345678901")); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("Add error = %v, want ErrInvalidKey", err)
+	}
+	if err := provider.SetCurrent("key"); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("SetCurrent error = %v, want ErrInvalidKey", err)
+	}
+	if _, _, err := provider.Current(); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("Current error = %v, want ErrInvalidKey", err)
+	}
+	if _, err := provider.Get("key"); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("Get error = %v, want ErrInvalidKey", err)
+	}
+}
