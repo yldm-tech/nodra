@@ -172,6 +172,8 @@ Retries are opt-in through `ActionOptions.Retry` and require `Idempotent: true`.
 
 `Metrics` on task status, traces and completion events separates `Debounce`, eligible `Queue` wait, `Work` and `Commit`. Commit measures the entire Store update attempt, including lock wait, clone/apply and synchronous mutation notifications; failed attempts still have a duration. Work excludes Before hooks. Other hooks and status callbacks are outside these phases, so they need not sum to Duration. `QueueDepth` counts live waiting tasks including debounce, and `ActiveWorkers` includes canceled work until it returns. Counts are sampled for that AsyncAction at publication time and are not a global live gauge. Tasks UI and JSON exports carry the same metrics.
 
+`AsyncAction.ExportMetrics` exposes the current aggregate through the dependency-free `MetricsSink` interface. Implement that one method to bridge Nodra into Prometheus, OpenTelemetry, logs, or an existing telemetry system without adding an SDK to the core module.
+
 ## Owned projections for large state
 
 `Get` and ordinary selector subscriptions preserve the Store's full-state cloning policy. For hot reads, `Select` borrows read-only state and copies only the projection you return:
