@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.9.0](https://github.com/yldm-tech/nodra/compare/v0.8.0...v0.9.0) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* compose derived state, debounce actions and bound diagnostic costs ([#25](https://github.com/yldm-tech/nodra/issues/25))
+* integrate read-only state, task scheduling and recovery diagnostics ([#23](https://github.com/yldm-tech/nodra/issues/23))
+* the import path github.com/yldm-tech/nodra/mygo is removed. Replace mygo.SubscribeInvalidation(store, window) from that package with nodra.Invalidate(store, window) from github.com/yldm-tech/nodra.
+* publish as one module at the repository root, github.com/yldm-tech/nodra ([#8](https://github.com/yldm-tech/nodra/issues/8))
+
+### Features
+
+* add save conflict detection and production state diagnostics ([#27](https://github.com/yldm-tech/nodra/issues/27)) ([27b7b99](https://github.com/yldm-tech/nodra/commit/27b7b99ad1c90cd36f818d79de3e184e370f2521))
+* add selector-based MyGo invalidation with automatic cleanup ([#19](https://github.com/yldm-tech/nodra/issues/19)) ([dc7cb70](https://github.com/yldm-tech/nodra/commit/dc7cb70ffbf8806014137eb931fddab3719c49f1))
+* add state isolation, migrations, async persistence, and DevTools ([#12](https://github.com/yldm-tech/nodra/issues/12)) ([3b652d2](https://github.com/yldm-tech/nodra/commit/3b652d28de2ee2c8a4778a29c132852149f9c289))
+* complete async state, history and DevTools workflows ([#21](https://github.com/yldm-tech/nodra/issues/21)) ([e2d780d](https://github.com/yldm-tech/nodra/commit/e2d780dbfe88029c23b18782436f01b46c8614ec))
+* compose derived state, debounce actions and bound diagnostic costs ([#25](https://github.com/yldm-tech/nodra/issues/25)) ([797a848](https://github.com/yldm-tech/nodra/commit/797a848b375772cb9aea85fccf6f084aad1797b2))
+* expose generic invalidation targets ([#37](https://github.com/yldm-tech/nodra/issues/37)) ([566514c](https://github.com/yldm-tech/nodra/commit/566514c2db696d63a63981639b789544d275e07d))
+* harden transactions retries persistence and DevTools ([#29](https://github.com/yldm-tech/nodra/issues/29)) ([ae923af](https://github.com/yldm-tech/nodra/commit/ae923affcfdc96827295aff19d93389ab2c13d3c))
+* integrate read-only state, task scheduling and recovery diagnostics ([#23](https://github.com/yldm-tech/nodra/issues/23)) ([c317a3e](https://github.com/yldm-tech/nodra/commit/c317a3eb453927783b62cc252afb74a47fb2c48c))
+* move MyGo invalidation into the root package as nodra.Invalidate ([#10](https://github.com/yldm-tech/nodra/issues/10)) ([3ed08e7](https://github.com/yldm-tech/nodra/commit/3ed08e7405971f75aa126695d819554a63cf2ebd))
+* **persistence:** add explicit backup recovery ([#38](https://github.com/yldm-tech/nodra/issues/38)) ([d5f5506](https://github.com/yldm-tech/nodra/commit/d5f550604e30928338d42d414ba198365c8f496e))
+* publish as one module at the repository root, github.com/yldm-tech/nodra ([#8](https://github.com/yldm-tech/nodra/issues/8)) ([e9ace62](https://github.com/yldm-tech/nodra/commit/e9ace62137e470e36a92d2e94580ef72058a883f))
+* settle derived state across atomic transactions ([#31](https://github.com/yldm-tech/nodra/issues/31)) ([f2ac9e0](https://github.com/yldm-tech/nodra/commit/f2ac9e057e739cab70ec6dbb2d3db814d055a56c))
+* support collection selectors and bounded large-state DevTools ([#16](https://github.com/yldm-tech/nodra/issues/16)) ([8938323](https://github.com/yldm-tech/nodra/commit/893832330aa4975bd7b6aa3f915bd1675ea5e086))
+
+
+### Bug Fixes
+
+* preserve reactive versions and history commit consistency ([#14](https://github.com/yldm-tech/nodra/issues/14)) ([eed35be](https://github.com/yldm-tech/nodra/commit/eed35be1ac6147edf34321013dde18a501e9da6c))
+
 ## [0.8.0](https://github.com/yldm-tech/nodra/compare/v0.7.0...v0.8.0) (2026-10-25)
 
 
