@@ -27,6 +27,8 @@ responses are not cached; the UI loads only its embedded local CSS/JavaScript.
 Close detaches all subscriptions and shuts down the listener. Each attach also
 returns an idempotent detach function. IDs must be unique among current stores.
 
+For a controlled remote read-only session, use `ListenRemoteReadOnly("host:port")` with `AllowRestore` left false. Remote mode accepts authenticated GET snapshot/search requests and rejects restore, clear and every other write method. The capability token is still sent as a bearer header, so put a non-loopback listener behind TLS or another encrypted transport and restrict its network access. `ListenRemoteReadOnly` refuses an inspector configured with `AllowRestore: true`.
+
 ## Inspecting state and events
 
 - The sidebar lists heterogeneous stores and their current source versions.

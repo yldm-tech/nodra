@@ -416,6 +416,8 @@ url, err := inspector.Listen() // random loopback port; open the full session UR
 
 The browser shows multiple stores, live state, bounded mutation/action history, action durations and errors, before/after diffs, filtering and JSON export. Set `AllowRestore: true` explicitly to enable typed JSON editing and restoring a retained snapshot. Restoration calls Set and emits new events; it does not reverse external action effects. `Redact` filters state before capture and disables restoration. `RedactMetadata` separately filters names, task keys and error text before timeline/task retention, pending progress and export. Metadata callback failures discard the original text and use a fixed diagnostic. Store IDs must be public labels. No external assets, services or frontend build step are required.
 
+For a controlled remote read-only session, call `inspector.ListenRemoteReadOnly("host:port")` with the default options. It exposes authenticated GET inspection only and rejects restore and clear; place a non-loopback listener behind TLS or another encrypted transport.
+
 Try the [interactive example](examples/devtools/main.go) and see the
 [DevTools guide](docs/devtools.md) for lifecycle, redaction and browser tests:
 
