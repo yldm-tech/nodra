@@ -35,6 +35,7 @@ export const UI = {
 		footnote: '签名已对照 v1.0.0 源码核对；以 pkg.go.dev 上的文档为准。',
 		metaTitle: 'Nodra 文档 · API 参考',
 		metaDesc: 'Nodra 根包的完整方法索引与语义约定：Store、选择器、原子事务、撤销重做、持久化、异步动作与 MyGo 集成。',
+		ogImageAlt: 'Nodra 文档：根包 API 参考，含方法签名、行为约定与并发说明。',
 	},
 	en: {
 		kicker: 'API REFERENCE · github.com/yldm-tech/nodra',
@@ -55,6 +56,7 @@ export const UI = {
 		footnote: 'Signatures are checked against the v1.0.0 sources; pkg.go.dev is authoritative.',
 		metaTitle: 'Nodra docs · API reference',
 		metaDesc: 'The method index and semantic contract of the Nodra root package: Store, selectors, atomic transactions, undo/redo, persistence, async actions and MyGo integration.',
+		ogImageAlt: 'Nodra docs: the root package API reference with signatures, contracts and concurrency notes.',
 	},
 };
 

@@ -13,6 +13,8 @@ export function NotFound() {
 	const t = COPY[lang];
 	return (
 		<div className='min-h-screen bg-ink'>
+			<title>{`${t.title} · Nodra`}</title>
+			<meta name='robots' content='noindex' />
 			<SiteHeader active='home' />
 			<main className='flex min-h-screen flex-col items-center justify-center gap-6 px-5 text-center'>
 				<Mascot mood='sad' ver='404' lang={lang} />
