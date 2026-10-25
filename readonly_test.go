@@ -61,6 +61,9 @@ func TestReadOnlyNilSources(t *testing.T) {
 	var reader ReadOnly[int]
 	var store *Store[int]
 	var pointer *ReadOnly[int]
+	if reader.ID() != "" {
+		t.Fatalf("zero ReadOnly ID = %q", reader.ID())
+	}
 	for _, source := range []Reader[int]{nil, store, reader, pointer} {
 		stop := Invalidate(source, &mygo.Window{})
 		stop()
