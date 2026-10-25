@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.0](https://github.com/yldm-tech/nodra/compare/v0.11.1...v0.12.0) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* move implementation behind root facade ([#50](https://github.com/yldm-tech/nodra/issues/50))
+
+### Bug Fixes
+
+* normalize nil file storage contexts ([#52](https://github.com/yldm-tech/nodra/issues/52)) ([3c87333](https://github.com/yldm-tech/nodra/commit/3c87333fd0515803c62656934313737a82ea138e))
+* reject typed-nil persistence dependencies ([#51](https://github.com/yldm-tech/nodra/issues/51)) ([1615043](https://github.com/yldm-tech/nodra/commit/1615043afbc7d6f20c8be6a8f5fb2d64b57ecac8))
+
+
+### Code Refactoring
+
+* move implementation behind root facade ([#50](https://github.com/yldm-tech/nodra/issues/50)) ([cfd230e](https://github.com/yldm-tech/nodra/commit/cfd230e2c844376b682099b8cc42c165aafa42db))
+
 ## [0.11.1](https://github.com/yldm-tech/nodra/compare/v0.11.0...v0.11.1) (2026-10-25)
 
 
