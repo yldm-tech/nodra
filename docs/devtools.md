@@ -1,8 +1,6 @@
 # Local DevTools
 
-DevTools is an optional Go subpackage with an embedded browser inspector. There
-is no frontend build step or runtime dependency on Node. Import it only in the
-development configuration that should expose the inspector.
+DevTools is an optional Go subpackage with an embedded browser inspector. There is no frontend build step or runtime dependency on Node. Import it only in the development configuration that should expose the inspector.
 
 ```go
 inspector := devtools.New(devtools.Options{Limit: 300})
@@ -19,13 +17,7 @@ if err != nil {
 fmt.Println(url)
 ```
 
-Listen binds an ephemeral port on `127.0.0.1` and returns a session URL. Open the
-whole URL, including its fragment: the browser sends its capability as a bearer
-header. The fragment is not part of HTTP requests or referrers. API routes reject
-missing tokens, cross-origin requests and non-loopback Host values. State
-responses are not cached; the UI loads only its embedded local CSS/JavaScript.
-Close detaches all subscriptions and shuts down the listener. Each attach also
-returns an idempotent detach function. IDs must be unique among current stores.
+Listen binds an ephemeral port on `127.0.0.1` and returns a session URL. Open the whole URL, including its fragment: the browser sends its capability as a bearer header. The fragment is not part of HTTP requests or referrers. API routes reject missing tokens, cross-origin requests and non-loopback Host values. State responses are not cached; the UI loads only its embedded local CSS/JavaScript. Close detaches all subscriptions and shuts down the listener. Each attach also returns an idempotent detach function. IDs must be unique among current stores.
 
 For a controlled remote read-only session, use `ListenRemoteReadOnly("host:port")` with `AllowRestore` left false. Remote mode accepts authenticated GET snapshot/search requests and rejects restore, clear and every other write method. The capability token is still sent as a bearer header, so put a non-loopback listener behind TLS or another encrypted transport and restrict its network access. `ListenRemoteReadOnly` refuses an inspector configured with `AllowRestore: true`.
 
@@ -33,27 +25,15 @@ Call `RotateToken` after changing the operator or network boundary. It invalidat
 
 ## Compatibility surface
 
-The exported `devtools` Go API and authenticated snapshot/export JSON are part
-of the v1 contract. JSON snapshots carry `Snapshot.Format` and the current
-format is `1`; additive fields are allowed, while a response meaning change
-requires a new format. Clients should ignore fields they do not use and must
-reject a format they cannot interpret. The embedded HTML, CSS, JavaScript, layout,
-polling cadence and screenshot appearance are development UI details and may
-change in a minor release. Do not build production integrations against DOM
-selectors or embedded asset paths.
+The exported `devtools` Go API and authenticated snapshot/export JSON are part of the v1 contract. JSON snapshots carry `Snapshot.Format` and the current format is `1`; additive fields are allowed, while a response meaning change requires a new format. Clients should ignore fields they do not use and must reject a format they cannot interpret. The embedded HTML, CSS, JavaScript, layout, polling cadence and screenshot appearance are development UI details and may change in a minor release. Do not build production integrations against DOM selectors or embedded asset paths.
 
 ## Inspecting state and events
 
 - The sidebar lists heterogeneous stores and their current source versions.
-- The timeline records initial state, mutations (direct/patch/reset/action) and
-  completed actions, with names, durations and errors. Failed actions appear
-  without inventing a successful state mutation.
-- State, Changes and Event panels show syntax-highlighted JSON with line numbers,
-  side-by-side Before/After differences and event metadata. Copy JSON copies the complete captured state without line numbers, including rows not currently rendered. Arrow keys, Home and End switch tabs.
-- Type filters narrow the timeline to mutations, actions or errors. Text search
-  further matches event type, mutation type, action name and error text.
-- Light and dark themes use the header toggle and remember the selection when
-  browser storage is available. Narrow windows stack the inspector below history.
+- The timeline records initial state, mutations (direct/patch/reset/action) and completed actions, with names, durations and errors. Failed actions appear without inventing a successful state mutation.
+- State, Changes and Event panels show syntax-highlighted JSON with line numbers, side-by-side Before/After differences and event metadata. Copy JSON copies the complete captured state without line numbers, including rows not currently rendered. Arrow keys, Home and End switch tabs.
+- Type filters narrow the timeline to mutations, actions or errors. Text search further matches event type, mutation type, action name and error text.
+- Light and dark themes use the header toggle and remember the selection when browser storage is available. Narrow windows stack the inspector below history.
 - Export snapshot downloads the current stores and retained event history as JSON.
 - Clear timeline removes history while keeping attached stores and current state.
 
@@ -69,28 +49,13 @@ History is bounded by both `Options.Limit` (200 events by default) and `Options.
 
 Event sequence numbers describe capture order; concurrent mutation callbacks can arrive out of source-version order. The current state only advances to the highest captured version. Action metadata includes the version observed at notification time; its state panel is explicitly live rather than a snapshot of the action. Updates during initial registration may coalesce into a catch-up snapshot.
 
-Snapshots are independent JSON buffers. Unsupported JSON types and redaction
-errors appear as inspection errors without preventing store updates. Capturing
-and serializing events runs on the notifying goroutine, so use the inspector
-where development overhead is acceptable and keep source values immutable or
-use NewWithClone.
+Snapshots are independent JSON buffers. Unsupported JSON types and redaction errors appear as inspection errors without preventing store updates. Capturing and serializing events runs on the notifying goroutine, so use the inspector where development overhead is acceptable and keep source values immutable or use NewWithClone.
 
 ## JSON editing and state restoration
 
-Pass `AllowRestore: true` to opt in. The inspector then exposes Apply JSON state
-and Restore snapshot. Both strictly decode into the attached store's Go type
-before Set; malformed JSON, wrong types and unknown struct fields are rejected
-without modifying state. Store subscriptions and persistence run normally.
-Unsubmitted JSON edits survive polling, including after the editor loses focus.
+Pass `AllowRestore: true` to opt in. The inspector then exposes Apply JSON state and Restore snapshot. Both strictly decode into the attached store's Go type before Set; malformed JSON, wrong types and unknown struct fields are rejected without modifying state. Store subscriptions and persistence run normally. Unsubmitted JSON edits survive polling, including after the editor loses focus.
 
-Restoration creates a new source version and new events. It does not undo network
-requests, file operations or other external effects of an action, and it does
-not replay action functions. JSON cannot preserve unexported fields, pointer
-identity or values excluded by json tags. Attach restorable state only when JSON
-replacement is appropriate. An evicted event cannot be restored; an event from a
-detached store cannot restore a new store later attached under the same ID,
-including when replacement races snapshot restoration. An already-running Apply
-may finish against its original store while that store is being detached.
+Restoration creates a new source version and new events. It does not undo network requests, file operations or other external effects of an action, and it does not replay action functions. JSON cannot preserve unexported fields, pointer identity or values excluded by json tags. Attach restorable state only when JSON replacement is appropriate. An evicted event cannot be restored; an event from a detached store cannot restore a new store later attached under the same ID, including when replacement races snapshot restoration. An already-running Apply may finish against its original store while that store is being detached.
 
 ## Redacting state
 
@@ -132,8 +97,7 @@ go run ./examples/devtools                 # read-only counter
 go run ./examples/devtools -restore        # enable editing/restoration
 ```
 
-The counter records a successful and rejected action, then increments once per
-second. Use `-interval=1h` for a stable manual editing session.
+The counter records a successful and rejected action, then increments once per second. Use `-interval=1h` for a stable manual editing session.
 
 Go tests cover capture, bounded history, independent exports, redaction, strict restoration, attachment generations, concurrent capture/close, authenticated API requests and listener shutdown. The optional Playwright smoke test drives the actual UI through inspection, error details, type/text filtering, clipboard copy, keyboard tabs, theme persistence, responsive layouts, state restoration, JSON validation, retained edits, export, diffs, clear and read-only mode. Rendering checks cover long identifiers, literal HTML strings, null snapshots, empty stores and disconnected sessions. Large-state fixtures exercise 2,500 records, lazy branch pagination, raw JSON pagination, search outside rendered rows, and explicit search/diff limits. CI runs it in headless Chromium:
 
@@ -144,8 +108,7 @@ npm install --prefix /tmp/nodra-browser --no-save --package-lock=false playwrigh
 PLAYWRIGHT_PATH=/tmp/nodra-browser/node_modules/playwright node scripts/devtools-smoke.mjs
 ```
 
-`DEVTOOLS_CHROMIUM_PATH` can select an existing Chromium executable.
-`DEVTOOLS_SCREENSHOT` optionally saves the exercised UI as a PNG.
+`DEVTOOLS_CHROMIUM_PATH` can select an existing Chromium executable. `DEVTOOLS_SCREENSHOT` optionally saves the exercised UI as a PNG.
 
 ![Nodra DevTools light theme and before/after difference](devtools.png)
 

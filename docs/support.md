@@ -1,8 +1,6 @@
 # Supported environments
 
-This matrix is the release contract for Nodra 1.0. CI is expected to exercise
-the rows marked as tested; other combinations may work but are not release
-targets until added here.
+This matrix is the release contract for Nodra 1.0. CI is expected to exercise the rows marked as tested; other combinations may work but are not release targets until added here.
 
 | Component | Supported baseline | Verification |
 | --- | --- | --- |
@@ -13,11 +11,6 @@ targets until added here.
 | CGO | Pure-Go builds are supported with `CGO_ENABLED=0`; CGO is not required by Nodra | Linux CI pure-Go build |
 | Filesystems | Local regular files for `FileStorage`; advisory locking is cooperative | persistence and conflict-detection tests |
 
-Nodra does not promise network-filesystem locking, hard-link alias detection,
-or arbitrary uncoordinated writers for `CheckedFileStorage`. The public API is
-usable without a running MyGo application, but the module intentionally keeps
-MyGo as a dependency for the invalidation helpers.
+Nodra does not promise network-filesystem locking, hard-link alias detection, or arbitrary uncoordinated writers for `CheckedFileStorage`. The public API is usable without a running MyGo application, but the module intentionally keeps MyGo as a dependency for the invalidation helpers.
 
-When a supported toolchain or MyGo version changes, update this file, the
-compatibility policy, and CI in the same pull request. A release must not rely
-on an undocumented local toolchain.
+When a supported toolchain or MyGo version changes, update this file, the compatibility policy, and CI in the same pull request. A release must not rely on an undocumented local toolchain.
