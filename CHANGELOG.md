@@ -6,6 +6,13 @@
 
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 
+## [1.1.0](https://github.com/yldm-tech/nodra/compare/v1.0.0...v1.1.0) (2026-10-25)
+
+
+### Features
+
+* **site:** add the official website ([#75](https://github.com/yldm-tech/nodra/issues/75)) ([c3449ea](https://github.com/yldm-tech/nodra/commit/c3449ea90afb0f3ec6a4e851ad90865e44fad094))
+
 ## [1.0.0](https://github.com/yldm-tech/nodra/compare/v0.13.0...v1.0.0) (2026-10-25)
 
 ### Stable API
