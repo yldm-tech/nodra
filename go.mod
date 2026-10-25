@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/egoist/mygo v0.6.3
-	github.com/gofrs/flock v0.13.0
+	github.com/gofrs/flock v0.13.1
 )
 
 require (
