@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { HomePage } from '../home/HomePage';
 import { SITE_NAME, SITE_URL, SOFTWARE, pageUrl, seoHead } from '../lib/seo';
+import { getAdoptionStats } from '../lib/stats';
 
 const META = {
 	zh: {
@@ -39,5 +40,8 @@ export const Route = createFileRoute('/')({
 			],
 		});
 	},
+	// Not awaited: the page renders immediately and the numbers stream in when the upstream calls finish.
+	loader: () => ({ stats: getAdoptionStats() }),
+	staleTime: 10 * 60 * 1000,
 	component: HomePage,
 });

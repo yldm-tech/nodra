@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { Mascot } from '../components/Mascot';
 import { INSTALL_CMD, type Lang } from '../lib/lang';
+import type { AdoptionStats as Stats } from '../lib/stats';
+import { AdoptionStats } from './AdoptionStats';
 import type { Copy } from './copy';
 import type { flowView } from './flow';
 import { Command, Dashes, Packet, kicker, padX } from './ui';
@@ -9,7 +11,7 @@ type HeroView = ReturnType<typeof flowView>;
 
 export const ctaPrimary = 'rounded-full bg-lime px-7 py-4 text-base font-bold text-ink shadow-[0_0_40px_-6px_rgba(200,240,90,0.7)] hover:bg-white hover:text-ink';
 
-export function Hero({ t, hv, lang, zoom, copyLabel, onCopy }: { t: Copy; hv: HeroView; lang: Lang; zoom: number; copyLabel: string; onCopy: () => void }) {
+export function Hero({ t, hv, lang, zoom, copyLabel, onCopy, stats }: { t: Copy; hv: HeroView; lang: Lang; zoom: number; copyLabel: string; onCopy: () => void; stats: Promise<Stats> }) {
 	return (
 		<section data-shape='0' className={`mx-auto flex min-h-screen max-w-[1312px] flex-wrap items-center gap-10 pt-[110px] pb-12 ${padX}`}>
 			<div className='relative flex min-w-0 flex-[1_1_420px] flex-col gap-[26px]'>
@@ -35,6 +37,7 @@ export function Hero({ t, hv, lang, zoom, copyLabel, onCopy }: { t: Copy; hv: He
 						{copyLabel}
 					</span>
 				</button>
+				<AdoptionStats stats={stats} lang={lang} />
 			</div>
 
 			<div className='flex min-w-0 flex-[1.35_1_560px] flex-col gap-3'>

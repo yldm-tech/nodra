@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Link, getRouteApi } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mascot } from '../components/Mascot';
 import { SiteHeader } from '../components/SiteHeader';
@@ -19,6 +19,8 @@ interface Zoom {
 	sec: number;
 }
 
+const homeRoute = getRouteApi('/');
+
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const inViewport = (selector: string) => {
@@ -38,6 +40,7 @@ export function HomePage() {
 	const lang = useLang();
 	const li = lang === 'en' ? 1 : 0;
 	const t = T[lang];
+	const { stats } = homeRoute.useLoaderData();
 
 	const [zoom, setZoom] = useState<Zoom>({ hero: 1, how: 1, sec: 1 });
 	useEffect(() => {
@@ -143,7 +146,7 @@ export function HomePage() {
 			<SiteHeader active='home' />
 
 			<main className='relative z-1'>
-				<Hero t={t} hv={hv} lang={lang} zoom={zoom.hero} copyLabel={copyLabel} onCopy={copyInstall} />
+				<Hero t={t} hv={hv} lang={lang} zoom={zoom.hero} copyLabel={copyLabel} onCopy={copyInstall} stats={stats} />
 
 				<HowItWorks
 					t={t}
