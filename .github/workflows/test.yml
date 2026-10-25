@@ -59,6 +59,24 @@ jobs:
       - name: Independent consumer
         working-directory: candidate
         run: bash scripts/check-consumer.sh
+      - name: Export reviewed public API
+        working-directory: candidate
+        env:
+          APIDIFF: ${{ runner.temp }}/api-tools/apidiff
+        run: |
+          mkdir -p "$RUNNER_TEMP/public-api"
+          "$APIDIFF" -w "$RUNNER_TEMP/public-api/root.export" github.com/yldm-tech/nodra
+          "$APIDIFF" -allow-internal -w "$RUNNER_TEMP/public-api/root-types.export" github.com/yldm-tech/nodra/internal/core
+          "$APIDIFF" -w "$RUNNER_TEMP/public-api/devtools.export" github.com/yldm-tech/nodra/devtools
+          git rev-parse HEAD > "$RUNNER_TEMP/public-api/commit.txt"
+          go version > "$RUNNER_TEMP/public-api/toolchain.txt"
+          go version -m "$APIDIFF" > "$RUNNER_TEMP/public-api/comparison-tool.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: public-api-${{ github.sha }}
+          path: ${{ runner.temp }}/public-api
+          if-no-files-found: error
+          retention-days: 90
 
   devtools-browser:
     runs-on: ubuntu-latest
@@ -84,13 +102,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: macos-26-intel
+            arch: amd64
+          - os: macos-26
+            arch: arm64
+          - os: windows-latest
+            arch: amd64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Verify native test architecture
+        shell: bash
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          actual=$(go env GOHOSTARCH)
+          if [[ "$actual" != "$EXPECTED_ARCH" ]]; then
+            echo "::error::native architecture is $actual, expected $EXPECTED_ARCH"
+            exit 1
+          fi
       - run: go test -race ./...
       - run: go vet ./...
       - if: runner.os == 'Linux'

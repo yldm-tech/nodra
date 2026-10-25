@@ -1,11 +1,24 @@
 # Changelog
 
-## [0.13.1](https://github.com/yldm-tech/nodra/compare/v0.13.0...v0.13.1) (2026-10-25)
+## [1.0.0](https://github.com/yldm-tech/nodra/compare/v0.13.0...v1.0.0) (2026-10-25)
 
+### Stable API
+
+* stabilize the root-package and DevTools Go APIs with explicit ownership, transaction, callback, persistence, and shutdown contracts
+* support Go 1.27.3 and MyGo 0.6.3, with native Linux/macOS/Windows amd64 tests, native macOS arm64 tests, and pure-Go Linux/Windows arm64 cross-builds
 
 ### Bug Fixes
 
+* propagate original Atomic2 and AtomicGroup notification panics after commit, while preserving rollback and PanicError results for preparation failures
+* correct the API reference for Store.Close, shallow ownership, sealed readers, conflict detection, async persistence, and task completion
 * **ci:** verify aliased APIs and exact release commits ([#71](https://github.com/yldm-tech/nodra/issues/71)) ([ca6732a](https://github.com/yldm-tech/nodra/commit/ca6732a98ba6e0eca909a3dc4709914b9248184d))
+
+### Verification
+
+* accept public state, persistence, actions, and DevTools from an independent consumer module with race detection
+* detect incompatible methods, fields, and interfaces behind public type aliases and compare with the latest published API
+* validate release tags and manifests before testing the exact released commit through the public Go proxy and checksum service
+* record the release gate in docs/release-1.0.md and verify DevTools in a browser with pinned Playwright
 
 ## [0.13.0](https://github.com/yldm-tech/nodra/compare/v0.12.1...v0.13.0) (2026-10-25)
 
@@ -13,15 +26,6 @@
 ### Features
 
 * **example:** add workbench localization ([#66](https://github.com/yldm-tech/nodra/issues/66)) ([fec2b9e](https://github.com/yldm-tech/nodra/commit/fec2b9e49b5638737830e9b7cd2861ee0f4e1892))
-
-## [Unreleased]
-
-### Maintenance
-
-* compare public APIs with the latest published release and verify published consumers from the exact tagged commit
-* detect incompatible method, field, and interface changes hidden behind root-package type aliases
-* define the v1 public API, support, callback, DevTools and security release gates
-* raise the minimum Go toolchain to 1.27.3 for the current standard-library security fix
 
 ## [0.12.1](https://github.com/yldm-tech/nodra/compare/v0.12.0...v0.12.1) (2026-10-25)
 
