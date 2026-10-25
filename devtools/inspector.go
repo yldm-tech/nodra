@@ -441,7 +441,7 @@ func (i *Inspector) Search(query string, limit int) []uint64 {
 }
 
 func eventBytes(event Event) int {
-	return 256 + len(event.StoreID) + len(event.Kind) + len(event.Mutation) + len(event.Name) + len(event.Key) + len(event.Phase) + len(event.Previous) + len(event.State) + len(event.Error)
+	return 256 + len(event.StoreID) + len(event.Kind) + len(event.Mutation) + len(event.Name) + len(event.Key) + len(event.Phase) + len(event.Previous) + len(event.State) + len(event.Error) + len(event.Data)
 }
 
 func (i *Inspector) record(node *attached, event Event, stateErr string, update bool) {
