@@ -31,6 +31,17 @@ For a controlled remote read-only session, use `ListenRemoteReadOnly("host:port"
 
 Call `RotateToken` after changing the operator or network boundary. It invalidates every previously issued session URL and returns the replacement token; requests that already passed authentication may finish. Set `Options.RequestsPerSecond` to a positive value to cap authenticated API requests per inspector in one-second windows. The limit returns HTTP 429 with `Retry-After: 1`; zero keeps the historical unlimited behavior.
 
+## Compatibility surface
+
+The exported `devtools` Go API and authenticated snapshot/export JSON are part
+of the v1 contract. JSON snapshots carry `Snapshot.Format` and the current
+format is `1`; additive fields are allowed, while a response meaning change
+requires a new format. Clients should ignore fields they do not use and must
+reject a format they cannot interpret. The embedded HTML, CSS, JavaScript, layout,
+polling cadence and screenshot appearance are development UI details and may
+change in a minor release. Do not build production integrations against DOM
+selectors or embedded asset paths.
+
 ## Inspecting state and events
 
 - The sidebar lists heterogeneous stores and their current source versions.
