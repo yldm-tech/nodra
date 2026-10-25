@@ -39,6 +39,9 @@ type FileStorage struct {
 }
 
 func (f FileStorage) LoadBackup(ctx context.Context) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !f.Backup || f.Path == "" {
 		return nil, ErrNoBackup
 	}
@@ -46,6 +49,9 @@ func (f FileStorage) LoadBackup(ctx context.Context) ([]byte, error) {
 }
 
 func (f FileStorage) Load(ctx context.Context) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -60,6 +66,9 @@ func (f FileStorage) Load(ctx context.Context) ([]byte, error) {
 	return os.ReadFile(f.Path)
 }
 func (f FileStorage) Save(ctx context.Context, data []byte) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if f.Journal {
 		return f.saveJournaled(ctx, data, nil)
 	}

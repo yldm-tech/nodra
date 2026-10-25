@@ -43,6 +43,23 @@ func TestFileStorageHonorsCancellation(t *testing.T) {
 	}
 }
 
+func TestFileStorageAcceptsNilContext(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "state.json")
+	storage := FileStorage{Path: path, Backup: true}
+	var nilContext context.Context
+	if err := storage.Save(nilContext, []byte("state")); err != nil {
+		t.Fatalf("save error = %v", err)
+	}
+	data, err := storage.Load(nilContext)
+	if err != nil || string(data) != "state" {
+		t.Fatalf("load = %q, error = %v", data, err)
+	}
+	backup, err := storage.LoadBackup(nilContext)
+	if err != nil || string(backup) != "state" {
+		t.Fatalf("backup = %q, error = %v", backup, err)
+	}
+}
+
 func TestFileStorageDurableRenameAndEncryptedPersistence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("directory fsync is platform-specific")
