@@ -116,7 +116,9 @@ func (s *Store[T]) Transaction(fn func(*T) error) error { return s.UpdateErr(fn)
 func (s *Store[T]) Reset() error {
 	return s.updateNamed("", MutationReset, func(v *T) error { *v = s.initial; return nil })
 }
-func (s *Store[T]) Patch(fn func(*T)) error { return s.Batch(func() { _ = s.Update(fn) }) }
+func (s *Store[T]) Patch(fn func(*T)) (err error) {
+	return s.Batch(func() { err = s.Update(fn) })
+}
 
 func (s *Store[T]) updateNamed(name string, kind MutationType, fn func(*T) error) error {
 	return s.updateCommitted(name, kind, fn, nil)
