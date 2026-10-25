@@ -53,7 +53,12 @@ func validInvalidationTarget(target InvalidationTarget) bool {
 		return false
 	}
 	value := reflect.ValueOf(target)
-	return value.Kind() != reflect.Pointer || !value.IsNil()
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return !value.IsNil()
+	default:
+		return true
+	}
 }
 
 // InvalidateSelector requests a frame only when the selected value changes, using SubscribeSelector's equality rules. The subscription stops when the window closes or the returned function is called. Selectors run on writer goroutines and must be concurrency-safe; selected reference values follow the store's ownership policy.

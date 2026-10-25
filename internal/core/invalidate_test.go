@@ -66,6 +66,33 @@ func TestInvalidateTargetIgnoresTypedNilTargets(t *testing.T) {
 	requireNoError(t, store.Set(1))
 }
 
+type nilMapInvalidationTarget map[string]struct{}
+
+func (nilMapInvalidationTarget) Invalidate() { panic("typed-nil map target was called") }
+
+type nilFuncInvalidationTarget func()
+
+func (nilFuncInvalidationTarget) Invalidate() { panic("typed-nil func target was called") }
+
+func TestInvalidateTargetIgnoresAllTypedNilValues(t *testing.T) {
+	store := New(0)
+	var mapTarget nilMapInvalidationTarget
+	var funcTarget nilFuncInvalidationTarget
+	for name, target := range map[string]InvalidationTarget{
+		"map":  mapTarget,
+		"func": funcTarget,
+	} {
+		t.Run(name, func(t *testing.T) {
+			stop := InvalidateTarget(store, target)
+			defer stop()
+			if n := listenerCount(store); n != 0 {
+				t.Fatalf("typed nil %s target subscribed %d listeners", name, n)
+			}
+			requireNoError(t, store.Set(1))
+		})
+	}
+}
+
 func TestInvalidateSubscribesUntilStopped(t *testing.T) {
 	store := New(0)
 	// A window without native Content ignores Invalidate, so publishing exercises the subscription without a running MyGo app.
