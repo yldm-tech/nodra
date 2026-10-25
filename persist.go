@@ -11,6 +11,9 @@ var ErrInvalidPersistence = errors.New("nodra: invalid persistence configuration
 
 var ErrNoBackup = errors.New("nodra: backup storage unavailable")
 
+// ErrPersistenceRecovery marks a failure to load both the primary and backup candidates.
+var ErrPersistenceRecovery = errors.New("nodra: primary and backup recovery failed")
+
 // PersistenceOptions validates decoded and saved state before it reaches the Store or storage. Validate must be pure and concurrency-safe, and must not mutate its input.
 type PersistenceOptions[T any] struct{ Validate func(T) error }
 
@@ -20,6 +23,19 @@ type LoadError struct {
 	Backup bool
 	Err    error
 }
+
+// RecoveryError preserves both the primary load failure and the backup load
+// failure returned by LoadWithRecovery. errors.Is and errors.As can inspect
+// either cause through the multi-error unwrap.
+type RecoveryError struct {
+	Primary error
+	Backup  error
+}
+
+func (e *RecoveryError) Error() string {
+	return fmt.Sprintf("%v: primary=%v; backup=%v", ErrPersistenceRecovery, e.Primary, e.Backup)
+}
+func (e *RecoveryError) Unwrap() []error { return []error{ErrPersistenceRecovery, e.Primary, e.Backup} }
 
 func (e *LoadError) Error() string {
 	return fmt.Sprintf("nodra: load %s (backup=%t): %v", e.Stage, e.Backup, e.Err)
@@ -61,6 +77,31 @@ func NewPersistenceWithOptions[T any](store *Store[T], storage Storage, codec Co
 
 func (p *Persistence[T]) Load(ctx context.Context) error {
 	return p.load(ctx, false)
+}
+
+// LoadWithRecovery explicitly tries the primary first and then the backup
+// when the primary cannot be read, decoded or validated. It never rewrites
+// either file and never hides a failure: if both candidates fail, RecoveryError
+// retains both causes. Cancellation and a closed Store stop before attempting
+// the backup.
+func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
+	primary := p.Load(ctx)
+	if primary == nil {
+		return nil
+	}
+	if errors.Is(primary, ErrInvalidPersistence) || errors.Is(primary, context.Canceled) || errors.Is(primary, context.DeadlineExceeded) || errors.Is(primary, ErrClosed) {
+		return primary
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	backup := p.LoadBackup(ctx)
+	if backup == nil {
+		return nil
+	}
+	return &RecoveryError{Primary: primary, Backup: backup}
 }
 
 // LoadBackup explicitly restores validated backup state to memory. It never rewrites the primary file, so a corrupt original remains available for diagnosis. Call before starting autosave; a later Save intentionally writes the current state to disk.
