@@ -263,7 +263,7 @@ tasks.Update(func(value *[]Task) {
 - `Create`, `Define`, `State`, `Patch`, and `Reset` aliases for familiar Pinia/Zustand workflows
 - Store IDs and independent named store instances
 - Action lifecycle hooks: before, after, and error
-- Nested `Batch` notification groups that publish one final snapshot
+- Nested `Batch` / `BatchErr` notification groups that publish one final snapshot
 - `Transaction` for one serialized, fallible mutation
 - `Atomic2`, `AtomicUpdate`, and `AtomicGroup` for cross-store visibility boundaries
 - `Track` / `TrackWith` history with bounded undo/redo, recording filters and cross-frame edit groups

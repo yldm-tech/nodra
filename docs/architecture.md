@@ -45,9 +45,7 @@ must be concurrency-safe, and must not reenter the store. The default policy and
 its zero-copy reference semantics remain available through `New` and `Define`;
 `DefineWithClone` propagates isolation to each named instance.
 
-`Batch` groups nested notifications and publishes
-once at the outermost boundary. Concurrent writers may join an open batch; use
-`Transaction` for one serialized mutation. A closed store rejects future writes with
+`Batch` groups nested notifications and publishes once at the outermost boundary. `BatchErr` has the same grouping semantics while returning an error from its callback; successful updates before that error remain committed. Concurrent writers may join an open batch; use `Transaction` for one serialized mutation or `Atomic2`/`AtomicGroup` when several stores must commit together. A closed store rejects future writes with
 `ErrClosed`, removes subscribers and closes active `Watch` streams.
 
 `Atomic2` extends this boundary across two stores with different value types. It orders store locks by address, prepares both candidates, commits both versions, and releases the transaction gate before user notifications. A callback error or panic leaves both values and versions unchanged; successful mutation events share a transaction ID.

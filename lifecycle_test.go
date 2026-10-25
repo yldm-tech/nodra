@@ -46,6 +46,21 @@ func TestPatchReturnsClosedError(t *testing.T) {
 	}
 }
 
+func TestBatchErrReturnsCallbackErrorAfterPublishingOnce(t *testing.T) {
+	store := New(0)
+	updates := 0
+	store.Subscribe(func(Snapshot[int]) { updates++ })
+	want := errors.New("stop batch")
+	if err := store.BatchErr(func() error {
+		requireNoError(t, store.Set(1))
+		return want
+	}); !errors.Is(err, want) {
+		t.Fatalf("BatchErr error = %v", err)
+	}
+	if store.Get() != 1 || store.Version() != 1 || updates != 1 {
+		t.Fatalf("batch state=%d version=%d updates=%d", store.Get(), store.Version(), updates)
+	}
+}
 func TestUpdateErrRollsBackAndPublishesOnlyOnSuccess(t *testing.T) {
 	store := New(5)
 	calls := 0

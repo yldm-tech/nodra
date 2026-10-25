@@ -116,9 +116,7 @@ func (s *Store[T]) Transaction(fn func(*T) error) error { return s.UpdateErr(fn)
 func (s *Store[T]) Reset() error {
 	return s.updateNamed("", MutationReset, func(v *T) error { *v = s.initial; return nil })
 }
-func (s *Store[T]) Patch(fn func(*T)) (err error) {
-	return s.Batch(func() { err = s.Update(fn) })
-}
+func (s *Store[T]) Patch(fn func(*T)) error { return s.BatchErr(func() error { return s.Update(fn) }) }
 
 func (s *Store[T]) updateNamed(name string, kind MutationType, fn func(*T) error) error {
 	return s.updateCommitted(name, kind, fn, nil)
@@ -258,7 +256,20 @@ func (s *Store[T]) publishLocked(before T, kind MutationType, name string) (Snap
 	return Snapshot[T]{Value: s.value, Version: s.version, TransactionID: s.transactionID}, s.listenersCopyLocked(), s.mutationListenersCopyLocked()
 }
 
+// Batch groups notifications from multiple updates into one final snapshot.
+// It does not roll back successful updates when fn returns an error; use
+// Atomic2 or AtomicGroup when the updates must commit as one transaction.
 func (s *Store[T]) Batch(fn func()) error {
+	if fn == nil {
+		return nil
+	}
+	return s.BatchErr(func() error { fn(); return nil })
+}
+
+// BatchErr groups notifications like Batch and returns the callback's error.
+// Updates completed before an error remain committed, but their subscribers
+// are still notified once when the outermost batch ends.
+func (s *Store[T]) BatchErr(fn func() error) error {
 	if fn == nil {
 		return nil
 	}
@@ -292,8 +303,7 @@ func (s *Store[T]) Batch(fn func()) error {
 		s.notify(listeners, snapshot)
 		s.notifyMutation(mutations, Mutation[T]{Type: kind, Name: name, Previous: before, Value: snapshot.Value, Version: snapshot.Version, At: time.Now()})
 	}()
-	fn()
-	return nil
+	return fn()
 }
 
 func (s *Store[T]) Close() error {
