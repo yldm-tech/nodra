@@ -1,6 +1,4 @@
-// Package devtools provides an opt-in local inspector for Nodra stores. It is
-// separate from the core so production applications need not import its server
-// or browser UI. Attach only the stores appropriate for a development session.
+// Package devtools provides an opt-in local inspector for Nodra stores. It is separate from the core so production applications need not import its server or browser UI. Attach only the stores appropriate for a development session.
 package devtools
 
 import (
@@ -39,8 +37,7 @@ type Options struct {
 	MaxStateBytes int
 	// MaxHistoryBytes budgets retained state/text plus event metadata (16 MiB).
 	MaxHistoryBytes int
-	// RequestsPerSecond limits authenticated API requests in a fixed one-second
-	// window. Zero disables the limit.
+	// RequestsPerSecond limits authenticated API requests in a fixed one-second window. Zero disables the limit.
 	RequestsPerSecond int
 	AllowRestore      bool
 	Redact            func(storeID string, state json.RawMessage) (json.RawMessage, error)
@@ -67,8 +64,7 @@ type Store struct {
 	Restorable            bool            `json:"restorable"`
 }
 
-// Event sequences describe capture order, not an ordering guarantee between
-// concurrent writers. Version and At preserve the source mutation's metadata.
+// Event sequences describe capture order, not an ordering guarantee between concurrent writers. Version and At preserve the source mutation's metadata.
 type Event struct {
 	TransactionID uint64             `json:"transactionId,omitempty"`
 	Metrics       nodra.TaskMetrics  `json:"metrics"`
@@ -138,9 +134,7 @@ type attached struct {
 	restore     func(json.RawMessage) error
 }
 
-// Inspector captures JSON state and events without changing Store's execution
-// model. Encoding occurs on the notifying goroutine; use it for development,
-// with immutable state or NewWithClone. Close releases subscriptions and server.
+// Inspector captures JSON state and events without changing Store's execution model. Encoding occurs on the notifying goroutine; use it for development, with immutable state or NewWithClone. Close releases subscriptions and server.
 type Inspector struct {
 	revision      uint64
 	cleared       uint64
@@ -182,9 +176,7 @@ func New(options Options) *Inspector {
 	return &Inspector{options: options, stores: make(map[string]*attached), token: rand.Text(), search: make(map[string]map[uint64]struct{})}
 }
 
-// RotateToken invalidates every previously issued session URL and returns the
-// replacement capability token. In-flight requests that already passed
-// authentication are allowed to finish.
+// RotateToken invalidates every previously issued session URL and returns the replacement capability token. In-flight requests that already passed authentication are allowed to finish.
 func (i *Inspector) RotateToken() (string, error) {
 	if i == nil {
 		return "", ErrClosed
@@ -200,9 +192,7 @@ func (i *Inspector) RotateToken() (string, error) {
 	return i.token, nil
 }
 
-// Attach observes one typed store. IDs are explicit and unique, so unnamed and
-// heterogeneous stores can share an inspector. Unsupported JSON values appear
-// as inspection errors. The returned function detaches this store idempotently.
+// Attach observes one typed store. IDs are explicit and unique, so unnamed and heterogeneous stores can share an inspector. Unsupported JSON values appear as inspection errors. The returned function detaches this store idempotently.
 func Attach[T any](i *Inspector, id string, source nodra.Reader[T]) (func(), error) {
 	if view, ok := source.(*nodra.ReadOnly[T]); ok && view == nil {
 		return nil, ErrInvalid
@@ -295,8 +285,7 @@ func Attach[T any](i *Inspector, id string, source nodra.Reader[T]) (func(), err
 		case <-watcherStop:
 		}
 	}()
-	// Catch an update during registration. Intermediate changes in this gap
-	// may coalesce, but the current state must not remain behind the source.
+	// Catch an update during registration. Intermediate changes in this gap may coalesce, but the current state must not remain behind the source.
 	latest := source.Snapshot()
 	if latest.Version > initial.Version {
 		state, stateErr := i.encode(id, latest.Value)
@@ -510,8 +499,7 @@ func (i *Inspector) Clear() {
 	i.mu.Unlock()
 }
 
-// Restore replaces a store with a retained event's typed JSON state. Action
-// side effects are not reversed. New snapshots/events are emitted normally.
+// Restore replaces a store with a retained event's typed JSON state. Action side effects are not reversed. New snapshots/events are emitted normally.
 func (i *Inspector) Restore(id string, sequence uint64) error {
 	i.mu.Lock()
 	if i.closed {
@@ -533,8 +521,7 @@ func (i *Inspector) Restore(id string, sequence uint64) error {
 	return i.apply(id, state, node)
 }
 
-// Apply strictly decodes one store's JSON before Set. It is disabled unless
-// AllowRestore is true and no redactor is configured. No actions are replayed.
+// Apply strictly decodes one store's JSON before Set. It is disabled unless AllowRestore is true and no redactor is configured. No actions are replayed.
 func (i *Inspector) Apply(id string, state json.RawMessage) error {
 	return i.apply(id, state, nil)
 }

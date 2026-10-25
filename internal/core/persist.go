@@ -24,9 +24,7 @@ type LoadError struct {
 	Err    error
 }
 
-// RecoveryError preserves both the primary load failure and the backup load
-// failure returned by LoadWithRecovery. errors.Is and errors.As can inspect
-// either cause through the multi-error unwrap.
+// RecoveryError preserves both the primary load failure and the backup load failure returned by LoadWithRecovery. errors.Is and errors.As can inspect either cause through the multi-error unwrap.
 type RecoveryError struct {
 	Primary error
 	Backup  error
@@ -42,8 +40,7 @@ func (e *LoadError) Error() string {
 }
 func (e *LoadError) Unwrap() error { return e.Err }
 
-// Storage is the minimal persistence backend used by Persistence. Files,
-// key-value databases and encrypted stores can implement it.
+// Storage is the minimal persistence backend used by Persistence. Files, key-value databases and encrypted stores can implement it.
 type Storage interface {
 	Load(context.Context) ([]byte, error)
 	Save(context.Context, []byte) error
@@ -55,10 +52,7 @@ type Codec[T any] interface {
 	Decode([]byte) (T, error)
 }
 
-// Persistence connects a store to a Storage and Codec. It is explicit by
-// default: call Load at startup and Save after successful application actions.
-// Save calls on the same instance are serialized, including state capture and
-// encoding. Separate instances sharing a storage destination are not coordinated.
+// Persistence connects a store to a Storage and Codec. It is explicit by default: call Load at startup and Save after successful application actions. Save calls on the same instance are serialized, including state capture and encoding. Separate instances sharing a storage destination are not coordinated.
 type Persistence[T any] struct {
 	saveMu  sync.Mutex
 	store   *Store[T]
@@ -79,11 +73,7 @@ func (p *Persistence[T]) Load(ctx context.Context) error {
 	return p.load(ctx, false)
 }
 
-// LoadWithRecovery explicitly tries the primary first and then the backup
-// when the primary cannot be read, decoded or validated. It never rewrites
-// either file and never hides a failure: if both candidates fail, RecoveryError
-// retains both causes. Cancellation and a closed Store stop before attempting
-// the backup.
+// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation and a closed Store stop before attempting the backup.
 func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
 	primary := p.Load(ctx)
 	if primary == nil {
@@ -147,8 +137,7 @@ func (p *Persistence[T]) Save(ctx context.Context) error {
 	return err
 }
 
-// save returns the version actually written, rather than a version sampled
-// before waiting on another save. Async flush barriers use that acknowledgement.
+// save returns the version actually written, rather than a version sampled before waiting on another save. Async flush barriers use that acknowledgement.
 func (p *Persistence[T]) save(ctx context.Context) (uint64, error) {
 	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) {
 		return 0, ErrInvalidPersistence
@@ -156,8 +145,7 @@ func (p *Persistence[T]) save(ctx context.Context) (uint64, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// Capture state only after taking the lock: a delayed older save must not
-	// overwrite a newer one, even when encoding itself is slow.
+	// Capture state only after taking the lock: a delayed older save must not overwrite a newer one, even when encoding itself is slow.
 	p.saveMu.Lock()
 	defer p.saveMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -176,8 +164,7 @@ func (p *Persistence[T]) save(ctx context.Context) (uint64, error) {
 	return snapshot.Version, p.storage.Save(ctx, data)
 }
 
-// AutoSave subscribes to updates and saves synchronously after each update.
-// The returned function stops autosaving. Use Batch to coalesce writes.
+// AutoSave subscribes to updates and saves synchronously after each update. The returned function stops autosaving. Use Batch to coalesce writes.
 func (p *Persistence[T]) AutoSave(ctx context.Context) func() {
 	if p == nil || p.store == nil {
 		return func() {}
@@ -185,9 +172,7 @@ func (p *Persistence[T]) AutoSave(ctx context.Context) func() {
 	return p.store.Subscribe(func(Snapshot[T]) { _ = p.Save(ctx) })
 }
 
-// AutoSaveWithErrors subscribes to updates and reports persistence failures on
-// a buffered channel. The channel closes when ctx is canceled or stop is called.
-// Stop releases the background watcher but does not wait for in-flight saves.
+// AutoSaveWithErrors subscribes to updates and reports persistence failures on a buffered channel. The channel closes when ctx is canceled or stop is called. Stop releases the background watcher but does not wait for in-flight saves.
 func (p *Persistence[T]) AutoSaveWithErrors(ctx context.Context) (<-chan error, func()) {
 	if p == nil || p.store == nil {
 		ch := make(chan error)

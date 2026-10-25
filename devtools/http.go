@@ -17,19 +17,12 @@ import (
 //go:embed web/*
 var web embed.FS
 
-// Listen starts an authenticated inspector on an ephemeral IPv4 loopback port.
-// The returned URL carries its capability token in the fragment (never sent in
-// HTTP requests or referrers); the UI uses it as a bearer header for its API.
-// Only one server can run per inspector. Close detaches stores and stops it.
+// Listen starts an authenticated inspector on an ephemeral IPv4 loopback port. The returned URL carries its capability token in the fragment (never sent in HTTP requests or referrers); the UI uses it as a bearer header for its API. Only one server can run per inspector. Close detaches stores and stops it.
 func (i *Inspector) Listen() (string, error) {
 	return i.listen("127.0.0.1:0", false)
 }
 
-// ListenRemoteReadOnly starts an authenticated read-only inspector on addr.
-// Remote mode serves only GET snapshot and search requests: restore, clear and
-// every other write method are rejected. The caller is responsible for placing
-// TLS or another encrypted transport in front of a non-loopback listener.
-// Restore must be disabled in Options as an additional safety check.
+// ListenRemoteReadOnly starts an authenticated read-only inspector on addr. Remote mode serves only GET snapshot and search requests: restore, clear and every other write method are rejected. The caller is responsible for placing TLS or another encrypted transport in front of a non-loopback listener. Restore must be disabled in Options as an additional safety check.
 func (i *Inspector) ListenRemoteReadOnly(addr string) (string, error) {
 	if i == nil {
 		return "", ErrClosed
@@ -70,9 +63,7 @@ func (i *Inspector) listen(addr string, remote bool) (string, error) {
 	return "http://" + listener.Addr().String() + "/#" + i.token, nil
 }
 
-// Handler serves the UI and authenticated API. Listen is the recommended local
-// entry point; ListenRemoteReadOnly enables the restricted remote transport.
-// Tokens are per inspector.
+// Handler serves the UI and authenticated API. Listen is the recommended local entry point; ListenRemoteReadOnly enables the restricted remote transport. Tokens are per inspector.
 func (i *Inspector) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

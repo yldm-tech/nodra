@@ -1,7 +1,6 @@
 package core
 
-// Definition is a reusable named store factory, analogous to Pinia's
-// defineStore and Zustand's reusable vanilla store creator.
+// Definition is a reusable named store factory, analogous to Pinia's defineStore and Zustand's reusable vanilla store creator.
 type Definition[T any] struct {
 	id      string
 	initial func() T

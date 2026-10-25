@@ -1,5 +1,4 @@
-// Command devtools runs a counter with a live local inspector. The session URL
-// is printed for this development process only. Stop with Ctrl+C.
+// Command devtools runs a counter with a live local inspector. The session URL is printed for this development process only. Stop with Ctrl+C.
 package main
 
 import (

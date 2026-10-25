@@ -19,4 +19,4 @@ else
   go mod edit -require=github.com/yldm-tech/nodra@v0.0.0 -replace="github.com/yldm-tech/nodra=$consumer_source"
 fi
 go mod tidy
-go test -mod=readonly -timeout=60s .
+go test -race -count=1 -mod=readonly -timeout=60s .

@@ -148,8 +148,7 @@ func TestPersistenceConcurrentSavesKeepLatestState(t *testing.T) {
 	<-codec.entered
 	requireNoError(t, store.Set(2))
 	go func() { second <- p.Save(context.Background()) }()
-	// Give a competing save an opportunity to finish. With serialization it
-	// waits behind the blocked encode; without it the old write wins last.
+	// Give a competing save an opportunity to finish. With serialization it waits behind the blocked encode; without it the old write wins last.
 	var secondErr error
 	secondFinished := false
 	select {
@@ -203,8 +202,7 @@ func TestAutoSaveWithErrorsReleasesWatcher(t *testing.T) {
 					t.Fatal("error channel is still open")
 				}
 				stop()
-				// synctest also requires every goroutine to exit when this
-				// function returns, including the background stop watcher.
+				// synctest also requires every goroutine to exit when this function returns, including the background stop watcher.
 			})
 		})
 	}

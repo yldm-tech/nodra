@@ -1,5 +1,4 @@
-// Command persistent demonstrates cloned state, schema migration and write-behind
-// persistence. Run with -file pointing to a new file or a legacy JSON word map.
+// Command persistent demonstrates cloned state, schema migration and write-behind persistence. Run with -file pointing to a new file or a legacy JSON word map.
 package main
 
 import (
@@ -57,8 +56,7 @@ func runWithRecovery(path string, recoverBackup bool) (result error) {
 	if err != nil {
 		return err
 	}
-	// Drain before canceling the parent or closing the store. Preserve any
-	// shutdown write error so the caller can surface it to the user.
+	// Drain before canceling the parent or closing the store. Preserve any shutdown write error so the caller can surface it to the user.
 	defer func() { result = errors.Join(result, writer.Close(ctx)) }()
 	if err := store.Update(func(v *wordState) {
 		if v.Words == nil {
