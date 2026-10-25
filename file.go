@@ -61,7 +61,7 @@ func (f FileStorage) Load(ctx context.Context) ([]byte, error) {
 }
 func (f FileStorage) Save(ctx context.Context, data []byte) error {
 	if f.Journal {
-		return f.saveJournaled(ctx, data)
+		return f.saveJournaled(ctx, data, nil)
 	}
 	return f.save(ctx, data, nil)
 }
@@ -69,7 +69,7 @@ func (f FileStorage) Save(ctx context.Context, data []byte) error {
 func (f FileStorage) journalPath() string { return f.Path + ".journal" }
 func (f FileStorage) commitPath() string  { return f.Path + ".commit" }
 
-func (f FileStorage) saveJournaled(ctx context.Context, data []byte) error {
+func (f FileStorage) saveJournaled(ctx context.Context, data []byte, primarySaved func()) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -92,6 +92,9 @@ func (f FileStorage) saveJournaled(ctx context.Context, data []byte) error {
 	}
 	if err := writeAtomicFile(ctx, f.Path, data, perm, durable); err != nil {
 		return fmt.Errorf("nodra: replace %s: %w", f.Path, err)
+	}
+	if primarySaved != nil {
+		primarySaved()
 	}
 	digest := sha256.Sum256(data)
 	if err := writeAtomicFile(ctx, f.commitPath(), []byte(hex.EncodeToString(digest[:])), 0600, durable); err != nil {

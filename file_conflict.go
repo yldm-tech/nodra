@@ -62,6 +62,9 @@ func (f FileStorage) WithConflictDetection(ctx context.Context) (*CheckedFileSto
 	f.Path = filepath.Join(dir, filepath.Base(absolute))
 	c := &CheckedFileStorage{file: f, access: make(chan struct{}, 1)}
 	err = c.withLock(ctx, func() error {
+		if err := c.file.recoverJournal(ctx); err != nil {
+			return err
+		}
 		_, fingerprint, err := fingerprintFile(f.Path)
 		if err == nil || errors.Is(err, os.ErrNotExist) {
 			c.expected = fingerprint
@@ -78,6 +81,9 @@ func (f FileStorage) WithConflictDetection(ctx context.Context) (*CheckedFileSto
 // Load explicitly accepts the bytes read as the new baseline. A missing primary acknowledges absence and still returns os.ErrNotExist. Decode/validation remains Persistence's responsibility; stop on those errors before starting autosave.
 func (c *CheckedFileStorage) Load(ctx context.Context) (data []byte, err error) {
 	err = c.withLock(ctx, func() error {
+		if err := c.file.recoverJournal(ctx); err != nil {
+			return err
+		}
 		var fingerprint FileFingerprint
 		var readErr error
 		data, fingerprint, readErr = fingerprintFile(c.file.Path)
@@ -108,12 +114,20 @@ func (c *CheckedFileStorage) Save(ctx context.Context, data []byte) error {
 		ctx = context.Background()
 	}
 	return c.withLock(ctx, func() error {
+		if err := c.file.recoverJournal(ctx); err != nil {
+			return err
+		}
 		_, actual, err := fingerprintFile(c.file.Path)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		if actual != c.expected {
 			return &FileConflictError{Path: c.file.Path, Expected: c.expected, Actual: actual}
+		}
+		if c.file.Journal {
+			return c.file.saveJournaled(ctx, data, func() {
+				c.expected = FileFingerprint{Exists: true, SHA256: sha256.Sum256(data)}
+			})
 		}
 		return c.file.save(ctx, data, func() {
 			c.expected = FileFingerprint{Exists: true, SHA256: sha256.Sum256(data)}
