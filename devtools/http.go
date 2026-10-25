@@ -103,9 +103,13 @@ func (i *Inspector) Handler() http.Handler {
 			}
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			supplied := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare([]byte(supplied), []byte(i.token)) != 1 {
+			if !i.authenticate(r.Header.Get("Authorization")) {
 				http.Error(w, "inspector token required", http.StatusUnauthorized)
+				return
+			}
+			if !i.allowAPIRequest() {
+				w.Header().Set("Retry-After", "1")
+				http.Error(w, "inspector request rate exceeded", http.StatusTooManyRequests)
 				return
 			}
 			i.serveAPI(w, r)
@@ -134,6 +138,36 @@ func (i *Inspector) Handler() http.Handler {
 		w.Header().Set("Content-Type", asset.mime)
 		_, _ = w.Write(data)
 	})
+}
+
+func (i *Inspector) authenticate(header string) bool {
+	if !strings.HasPrefix(header, "Bearer ") {
+		return false
+	}
+	supplied := strings.TrimPrefix(header, "Bearer ")
+	i.mu.Lock()
+	token := i.token
+	i.mu.Unlock()
+	return subtle.ConstantTimeCompare([]byte(supplied), []byte(token)) == 1
+}
+
+func (i *Inspector) allowAPIRequest() bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	limit := i.options.RequestsPerSecond
+	if limit <= 0 {
+		return true
+	}
+	now := time.Now()
+	if i.requestWindow.IsZero() || now.Sub(i.requestWindow) >= time.Second {
+		i.requestWindow = now
+		i.requestCount = 0
+	}
+	if i.requestCount >= limit {
+		return false
+	}
+	i.requestCount++
+	return true
 }
 
 func (i *Inspector) serveAPI(w http.ResponseWriter, r *http.Request) {
