@@ -1,6 +1,7 @@
 package nodra
 
 import (
+	"reflect"
 	"sync"
 
 	"github.com/egoist/mygo"
@@ -39,15 +40,20 @@ func Invalidate[T any](source Observable[T], window *mygo.Window) (stop func()) 
 	})
 }
 
-// InvalidateTarget requests a redraw from any InvalidationTarget whenever the
-// source publishes. It accepts read-only and derived sources without exposing
-// a concrete UI toolkit. The caller owns the target lifecycle and should call
-// the returned stop function when the target is no longer valid.
+// InvalidateTarget requests a redraw from any InvalidationTarget whenever the source publishes. Nil and typed-nil targets are ignored. It accepts read-only and derived sources without exposing a concrete UI toolkit. The caller owns the target lifecycle and should call the returned stop function when the target is no longer valid.
 func InvalidateTarget[T any](source Observable[T], target InvalidationTarget) func() {
-	if !validObservable(source) || target == nil {
+	if !validObservable(source) || !validInvalidationTarget(target) {
 		return func() {}
 	}
 	return source.SubscribeSnapshot(func(Snapshot[T]) { target.Invalidate() })
+}
+
+func validInvalidationTarget(target InvalidationTarget) bool {
+	if target == nil {
+		return false
+	}
+	value := reflect.ValueOf(target)
+	return value.Kind() != reflect.Pointer || !value.IsNil()
 }
 
 // InvalidateSelector requests a frame only when the selected value changes, using SubscribeSelector's equality rules. The subscription stops when the window closes or the returned function is called. Selectors run on writer goroutines and must be concurrency-safe; selected reference values follow the store's ownership policy.
