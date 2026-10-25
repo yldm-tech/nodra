@@ -4,6 +4,8 @@
 
 The example demonstrates a cloned settings Store, local form drafts with `BindField`-style commit behavior, validated JSON persistence with backups, asynchronous file-name search with debounce, cancellation and bounded results, asynchronous settings saves, `Scope` ownership and shutdown, MyGo invalidation, and optional authenticated DevTools inspection.
 
+The settings panel includes English and Simplified Chinese. The selected language is stored with the validated settings, changes the application catalog immediately, and is restored on the next launch through MyGo's locale support.
+
 Run it from the repository root:
 
 ```sh

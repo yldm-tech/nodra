@@ -22,6 +22,7 @@ import (
 type settings struct {
 	Root          string `json:"root"`
 	IncludeHidden bool   `json:"includeHidden"`
+	Language      string `json:"language"`
 }
 type searchInput struct {
 	Settings settings
@@ -49,11 +50,16 @@ type workbench struct {
 }
 
 func newWorkbench(root, path string) (*workbench, error) {
-	prefs := nodra.New(settings{Root: root})
+	prefs := nodra.New(settings{Root: root, Language: languageEnglish})
 	persistence := nodra.NewPersistenceWithOptions(prefs, nodra.FileStorage{Path: path, Backup: true}, nodra.JSONCodec[settings]{}, nodra.PersistenceOptions[settings]{Validate: validateSettings})
 	notice := ""
 	if err := persistence.Load(context.Background()); err != nil && !errors.Is(err, os.ErrNotExist) {
 		notice = "Could not load settings: " + err.Error()
+	}
+	if prefs.Get().Language == "" {
+		if err := prefs.Update(func(value *settings) { value.Language = languageEnglish }); err != nil {
+			return nil, err
+		}
 	}
 	app := &workbench{scope: nodra.NewScope(), settings: prefs, draft: prefs.Get(), notice: notice, results: nodra.NewWithClone(searchResult{}, func(v searchResult) searchResult { v.Files = slices.Clone(v.Files); return v })}
 	_ = app.scope.Defer(func(context.Context) error { return app.settings.Close() })
@@ -153,6 +159,7 @@ func (app *workbench) saveDraft() {
 		return
 	}
 	app.draft.Root = root
+	app.draft.Language = normalizeLanguage(app.draft.Language)
 	task, err := app.save.Run(app.scope.Context(), app.draft)
 	if err != nil {
 		app.notice = err.Error()
@@ -160,39 +167,52 @@ func (app *workbench) saveDraft() {
 	}
 	app.saveRun = task
 }
-func (app *workbench) discardDraft() { app.draft = app.settings.Get(); app.notice = "" }
+func (app *workbench) discardDraft() {
+	app.draft = app.settings.Get()
+	app.applyLanguage(app.draft.Language)
+	app.notice = ""
+}
+
+func (app *workbench) applyLanguage(language string) {
+	app.draft.Language = normalizeLanguage(language)
+	mygo.App.SetLocale(app.draft.Language)
+}
 
 func (app *workbench) view(c *ui.Context) {
 	theme := c.Theme()
+	labels := translationsFor(app.draft.Language)
 	search, save := app.search.Status().Get(), app.save.Status().Get()
 	// Copy only the result fields displayed by this frame, rather than cloning unrelated state.
 	result := nodra.Select(app.results.ReadOnly(), func(s searchResult) searchResult { s.Files = slices.Clone(s.Files); return s }).Value
 	dirty := app.draft != app.settings.Get()
 	ui.Column(c).Fill().Padding(24).Gap(20).Children(func() {
 		ui.Row(c).FillWidth().Gap(12).Children(func() {
-			ui.Text(c, "Workspace search").FontSize(24).Bold()
+			ui.Text(c, labels.title).FontSize(24).Bold()
 			ui.Spacer(c).Grow(1)
-			ui.Text(c, "Nodra + MyGo").TextColor(theme.TextMuted)
+			ui.Text(c, labels.brand).TextColor(theme.TextMuted)
 		})
-		ui.Text(c, "Find local files. Keep drafts separate from saved preferences.").TextColor(theme.TextMuted)
+		ui.Text(c, labels.tagline).TextColor(theme.TextMuted)
 		ui.Row(c).FillWidth().Grow(1).Gap(24).AlignItems(ui.Stretch).Children(func() {
 			ui.Column(c).Width(280).Padding(18).Gap(14).Background(theme.Surface).Radius(12).Children(func() {
-				ui.Text(c, "Search preferences").FontSize(17).Bold()
-				ui.Text(c, "Folder").Bold()
-				ui.TextInput(c, &app.draft.Root).Label("Folder path").Placeholder("Folder path").FillWidth().ReadOnly(save.Running)
-				ui.Checkbox(c, &app.draft.IncludeHidden, "Include hidden files").Disabled(save.Running)
-				ui.Text(c, "Changes apply after a successful save.").FontSize(12).TextColor(theme.TextMuted)
+				ui.Text(c, labels.preferences).FontSize(17).Bold()
+				ui.Text(c, labels.folder).Bold()
+				ui.TextInput(c, &app.draft.Root).Label(labels.folderPlaceholder).Placeholder(labels.folderPlaceholder).FillWidth().ReadOnly(save.Running)
+				ui.Checkbox(c, &app.draft.IncludeHidden, labels.includeHidden).Disabled(save.Running)
+				ui.Text(c, labels.changesApply).FontSize(12).TextColor(theme.TextMuted)
+				if ui.Select(c, &app.draft.Language, languageOptions).Label(labels.language).Changed() {
+					app.applyLanguage(app.draft.Language)
+				}
 				ui.Row(c).Gap(8).Children(func() {
-					ui.PrimaryButton(c, "Save settings").Disabled(!dirty || save.Running).OnClick(app.saveDraft)
-					ui.Button(c, "Cancel edits").Disabled(!dirty || save.Running).OnClick(app.discardDraft)
+					ui.PrimaryButton(c, labels.saveSettings).Disabled(!dirty || save.Running).OnClick(app.saveDraft)
+					ui.Button(c, labels.cancelEdits).Disabled(!dirty || save.Running).OnClick(app.discardDraft)
 				})
 				if save.Running {
-					ui.Text(c, "Saving settings…")
+					ui.Text(c, labels.saving)
 					ui.Progress(c, -1).FillWidth()
 				} else if dirty && save.Error != "" {
-					ui.Text(c, "Save failed: "+save.Error).TextColor(theme.Danger).Wrap()
+					ui.Text(c, labels.saveFailed+save.Error).TextColor(theme.Danger).Wrap()
 				} else if !dirty {
-					ui.Text(c, "Settings saved").TextColor(theme.Success)
+					ui.Text(c, labels.saved).TextColor(theme.Success)
 				}
 				if app.notice != "" {
 					ui.Text(c, app.notice).TextColor(theme.Danger).Wrap()
@@ -200,32 +220,32 @@ func (app *workbench) view(c *ui.Context) {
 			})
 			ui.Column(c).Grow(1).Gap(14).Children(func() {
 				ui.Row(c).FillWidth().Gap(8).Children(func() {
-					ui.TextInput(c, &app.query).Label("Search file names").Placeholder("Search file names…").Grow(1).OnChange(app.startSearch)
-					ui.Button(c, "Search").OnClick(app.startSearch)
-					ui.Button(c, "Cancel search").Disabled(!search.Running).OnClick(func() {
+					ui.TextInput(c, &app.query).Label(labels.searchPlaceholder).Placeholder(labels.searchPlaceholder).Grow(1).OnChange(app.startSearch)
+					ui.Button(c, labels.search).OnClick(app.startSearch)
+					ui.Button(c, labels.cancelSearch).Disabled(!search.Running).OnClick(func() {
 						if app.searchRun != nil {
 							app.searchRun.Cancel()
 						}
 					})
 				})
 				if search.Running {
-					ui.Text(c, "Searching…")
+					ui.Text(c, labels.searching)
 					ui.Progress(c, -1).FillWidth()
 				} else if search.Error != "" {
 					ui.Text(c, search.Error).TextColor(theme.TextMuted).Wrap()
 				} else {
-					ui.Textf(c, "%d matches · %d files checked", len(result.Files), result.Visited).TextColor(theme.TextMuted)
+					ui.Textf(c, labels.matches, len(result.Files), result.Visited).TextColor(theme.TextMuted)
 				}
 				if result.Truncated {
-					ui.Text(c, "Showing a bounded result set. Narrow the query or folder.").TextColor(theme.Warning).Wrap()
+					ui.Text(c, labels.truncated).TextColor(theme.Warning).Wrap()
 				}
 				if result.Query != "" {
-					ui.Textf(c, "Results for %q", result.Query).FontSize(12).TextColor(theme.TextMuted)
+					ui.Textf(c, labels.resultsFor, result.Query).FontSize(12).TextColor(theme.TextMuted)
 				}
 				ui.Scroll(c).FillWidth().Grow(1).Children(func() {
 					ui.Column(c).FillWidth().Gap(8).Children(func() {
 						if len(result.Files) == 0 {
-							ui.Text(c, "Type a file name to begin.").TextColor(theme.TextMuted)
+							ui.Text(c, labels.typeToBegin).TextColor(theme.TextMuted)
 						}
 						for _, path := range result.Files {
 							ui.Text(c.Key(path), path).FillWidth().Wrap()
@@ -262,6 +282,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer app.close()
+	mygo.App.SetLanguages(languageOptions...)
+	mygo.App.SetLocale(app.settings.Get().Language)
 	if *inspect {
 		inspector := devtools.New(devtools.Options{})
 		_ = app.scope.Defer(func(context.Context) error { return inspector.Close() })
@@ -296,6 +318,9 @@ func main() {
 }
 
 func validateSettings(value settings) error {
+	if value.Language != "" && normalizeLanguage(value.Language) != value.Language {
+		return errors.New("unsupported language")
+	}
 	info, err := os.Stat(value.Root)
 	if err != nil {
 		return err

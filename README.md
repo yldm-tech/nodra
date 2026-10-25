@@ -434,7 +434,7 @@ The [public API reference](docs/public-api.md) is the method index for the root 
 
 ## Complete example project
 
-[`examples/workbench`](examples/workbench/README.md) is the full runnable Nodra + MyGo project. It combines cloned state, local drafts, validated backup persistence, debounced and cancelable async search, async saves, scoped shutdown, native invalidation and optional DevTools. Run `go run ./examples/workbench` for the desktop app or add `-devtools` to print an authenticated local inspector URL.
+[`examples/workbench`](examples/workbench/README.md) is the full runnable Nodra + MyGo project. It combines cloned state, local drafts, validated backup persistence, debounced and cancelable async search, async saves, scoped shutdown, native invalidation, English/Simplified Chinese localization and optional DevTools. Run `go run ./examples/workbench` for the desktop app or add `-devtools` to print an authenticated local inspector URL.
 
 ```sh
 go test -race ./...
