@@ -8,8 +8,7 @@
 go get github.com/yldm-tech/nodra@latest
 ```
 
-The core API is in `github.com/yldm-tech/nodra`. The optional local inspector is
-in `github.com/yldm-tech/nodra/devtools`, so applications can omit its server and UI.
+The core API is in `github.com/yldm-tech/nodra`. The optional local inspector is in `github.com/yldm-tech/nodra/devtools`, so applications can omit its server and UI.
 
 ## MyGo usage
 
@@ -276,8 +275,7 @@ tasks.Update(func(value *[]Task) {
 - `AESGCMCodec` and key-provider interfaces for authenticated encrypted persistence with key rotation
 - Context-bound, bounded `Watch` streams that close with the store
 - `Invalidate` and `InvalidateSelector` for window-bound redraw subscriptions with automatic cleanup
-- Optional DevTools with a local browser inspector, mutation/action timeline,
-  lazy state trees, key/value search, bounded state diffs, snapshot export, JSON editing and opt-in state restoration
+- Optional DevTools with a local browser inspector, mutation/action timeline, lazy state trees, key/value search, bounded state diffs, snapshot export, JSON editing and opt-in state restoration
 
 ## Design guarantees
 
@@ -292,8 +290,7 @@ tasks.Update(func(value *[]Task) {
 
 ## Isolated mutable state
 
-When state contains maps, slices or pointers, opt in to cloning instead of
-maintaining copy-on-write manually:
+When state contains maps, slices or pointers, opt in to cloning instead of maintaining copy-on-write manually:
 
 ```go
 store := nodra.NewWithClone(map[string]int{"count": 0}, func(v map[string]int) map[string]int {
@@ -305,10 +302,7 @@ err := store.Transaction(func(state *map[string]int) error {
 })
 ```
 
-Clone all mutable nested references too. The function must support concurrent
-calls and must not reenter the store. Each isolation boundary costs a copy; keep
-using `New` for immutable state or large data already managed with copy-on-write.
-Named factories support the same policy through `DefineWithClone`.
+Clone all mutable nested references too. The function must support concurrent calls and must not reenter the store. Each isolation boundary costs a copy; keep using `New` for immutable state or large data already managed with copy-on-write. Named factories support the same policy through `DefineWithClone`.
 
 ## Collection selectors
 
@@ -327,9 +321,7 @@ For maps use `maps.Equal[map[string]int, map[string]int]` or a custom comparator
 
 ## Versioned persistence
 
-`VersionedJSONCodec[T]` wraps state in `{"schemaVersion": N, "state": ...}`.
-`Migrations[n]` transforms state JSON from version n to n+1. With
-`AllowUnversioned: true`, existing raw JSON enters the chain at version zero:
+`VersionedJSONCodec[T]` wraps state in `{"schemaVersion": N, "state": ...}`. `Migrations[n]` transforms state JSON from version n to n+1. With `AllowUnversioned: true`, existing raw JSON enters the chain at version zero:
 
 ```go
 codec := nodra.VersionedJSONCodec[Settings]{
@@ -344,9 +336,7 @@ persistence := nodra.NewPersistence(store, nodra.FileStorage{Path: path}, codec)
 err := persistence.Load(ctx) // completes migrations before changing the store
 ```
 
-Missing migrations, invalid migration output and future schemas return errors.
-A failed load leaves the store and file untouched. Load before starting autosave;
-successful migration is written by a subsequent `Save` or autosave.
+Missing migrations, invalid migration output and future schemas return errors. A failed load leaves the store and file untouched. Load before starting autosave; successful migration is written by a subsequent `Save` or autosave.
 
 ## Validated persistence and backup recovery
 
@@ -396,8 +386,7 @@ The writer schedules the current state once at startup. `Flush` waits for the ve
 
 Parent cancellation and store closure stop the worker without a guaranteed drain.
 
-[`examples/persistent`](examples/persistent/main.go) combines cloning, legacy
-migration, error handling and graceful shutdown:
+[`examples/persistent`](examples/persistent/main.go) combines cloning, legacy migration, error handling and graceful shutdown:
 
 ```sh
 go run ./examples/persistent -file /path/to/state.json
@@ -431,8 +420,7 @@ The browser shows multiple stores, live state, bounded mutation/action history, 
 
 For a controlled remote read-only session, call `inspector.ListenRemoteReadOnly("host:port")` with the default options. It exposes authenticated GET inspection only and rejects restore and clear; place a non-loopback listener behind TLS or another encrypted transport. `RotateToken` invalidates previously issued URLs, and `Options.RequestsPerSecond` adds a per-inspector API rate limit.
 
-Try the [interactive example](examples/devtools/main.go) and see the
-[DevTools guide](docs/devtools.md) for lifecycle, redaction and browser tests:
+Try the [interactive example](examples/devtools/main.go) and see the [DevTools guide](docs/devtools.md) for lifecycle, redaction and browser tests:
 
 ```sh
 go run ./examples/devtools -restore
@@ -442,11 +430,7 @@ go run ./examples/devtools -restore
 
 ## Verification
 
-The [public API reference](docs/public-api.md) is the method index for the
-root package, including generic aliases whose methods some `go doc` renderers
-do not expand. The [support matrix](docs/support.md) defines the Go, MyGo,
-platform, architecture and filesystem combinations covered by the v1 release
-contract.
+The [public API reference](docs/public-api.md) is the method index for the root package, including generic aliases whose methods some `go doc` renderers do not expand. The [support matrix](docs/support.md) defines the Go, MyGo, platform, architecture and filesystem combinations covered by the v1 release contract.
 
 ```sh
 go test -race ./...
