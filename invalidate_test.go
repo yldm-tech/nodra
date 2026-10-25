@@ -55,6 +55,17 @@ func TestInvalidateTargetSupportsCustomHostsAndDerivedSources(t *testing.T) {
 	}
 }
 
+func TestInvalidateTargetIgnoresTypedNilTargets(t *testing.T) {
+	store := New(0)
+	var target *invalidationTargetFake
+	stop := InvalidateTarget(store, target)
+	defer stop()
+	if n := listenerCount(store); n != 0 {
+		t.Fatalf("typed nil target subscribed %d listeners", n)
+	}
+	requireNoError(t, store.Set(1))
+}
+
 func TestInvalidateSubscribesUntilStopped(t *testing.T) {
 	store := New(0)
 	// A window without native Content ignores Invalidate, so publishing exercises the subscription without a running MyGo app.
