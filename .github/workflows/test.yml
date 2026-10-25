@@ -20,17 +20,42 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha || (github.ref == 'refs/heads/main' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'main' }}
           path: baseline
+      - name: Resolve latest published API baseline
+        id: released
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::invalid published API baseline: $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ steps.released.outputs.tag }}
+          path: released
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: candidate/go.mod
           cache-dependency-path: candidate/go.sum
       - name: Install API comparison tool
         run: GOBIN="$RUNNER_TEMP/api-tools" go install golang.org/x/exp/cmd/apidiff@v0.0.0-20261014143641-f0251eb4aa3e
+      - name: Alias API regression checks
+        working-directory: candidate
+        env:
+          APIDIFF: ${{ runner.temp }}/api-tools/apidiff
+        run: bash .github/scripts/test-api-check.sh
       - name: Compare public APIs
         working-directory: candidate
         env:
           APIDIFF: ${{ runner.temp }}/api-tools/apidiff
         run: bash scripts/check-api.sh "$GITHUB_WORKSPACE/baseline"
+      - name: Compare with latest published API
+        working-directory: candidate
+        env:
+          APIDIFF: ${{ runner.temp }}/api-tools/apidiff
+        run: bash scripts/check-api.sh "$GITHUB_WORKSPACE/released"
       - name: Independent consumer
         working-directory: candidate
         run: bash scripts/check-consumer.sh
@@ -125,3 +150,6 @@ jobs:
           fi
       - name: go mod tidy leaves no diff
         run: go mod tidy -diff
+      - name: Release tag resolution regressions
+        shell: bash
+        run: bash .github/scripts/test-release-resolution.sh
