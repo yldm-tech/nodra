@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/yldm-tech/nodra/compare/v0.12.1...v0.13.0) (2026-10-25)
+
+
+### Features
+
+* **example:** add workbench localization ([#66](https://github.com/yldm-tech/nodra/issues/66)) ([fec2b9e](https://github.com/yldm-tech/nodra/commit/fec2b9e49b5638737830e9b7cd2861ee0f4e1892))
+
 ## [Unreleased]
 
 ### Maintenance
