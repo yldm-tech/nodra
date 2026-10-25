@@ -291,6 +291,9 @@ func (a *AsyncPersistence[T]) waitDebounce() bool {
 	}
 	timer := time.NewTimer(a.options.Debounce)
 	defer timer.Stop()
+	a.mu.Lock()
+	observed := a.requested
+	a.mu.Unlock()
 	for {
 		a.mu.Lock()
 		force := a.force
@@ -303,12 +306,43 @@ func (a *AsyncPersistence[T]) waitDebounce() bool {
 			return false
 		case <-a.p.store.done:
 			return false
-		case <-timer.C:
-			return true
 		case <-a.wake:
-			timer.Reset(a.options.Debounce)
+			a.mu.Lock()
+			observed = a.requested
+			force = a.force
+			a.mu.Unlock()
+			if force {
+				return true
+			}
+			resetDebounceTimer(timer, a.options.Debounce)
+		case <-timer.C:
+			a.mu.Lock()
+			force = a.force
+			changed := a.requested != observed
+			if changed {
+				observed = a.requested
+			}
+			a.mu.Unlock()
+			if force {
+				return true
+			}
+			if changed {
+				resetDebounceTimer(timer, a.options.Debounce)
+				continue
+			}
+			return true
 		}
 	}
+}
+
+func resetDebounceTimer(timer *time.Timer, duration time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(duration)
 }
 
 // PersistenceState describes this async writer's durable acknowledgement, not writes made through other Persistence instances. HasSaved distinguishes an unsaved initial version zero. Pending remains true after failures and shutdown with unsaved changes. Error is the last write failure, cleared on retry. Revision orders publications independently of Store versions.
