@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+* record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
+
 ## [1.0.0](https://github.com/yldm-tech/nodra/compare/v0.13.0...v1.0.0) (2026-10-25)
 
 ### Stable API
