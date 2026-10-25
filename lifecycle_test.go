@@ -38,6 +38,14 @@ func TestCloseStopsUpdatesAndSubscriptions(t *testing.T) {
 	}
 }
 
+func TestPatchReturnsClosedError(t *testing.T) {
+	store := New(1)
+	requireNoError(t, store.Close())
+	if err := store.Patch(func(value *int) { *value = 2 }); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Patch error = %v", err)
+	}
+}
+
 func TestUpdateErrRollsBackAndPublishesOnlyOnSuccess(t *testing.T) {
 	store := New(5)
 	calls := 0
