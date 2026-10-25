@@ -59,7 +59,8 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 					prepared = next
 					return nil
 				},
-				commit: func(_ uint64) atomicNotification {
+				commit: func(transactionID uint64) atomicNotification {
+					store.transactionID = transactionID
 					store.value = prepared
 					store.version++
 					snapshot, listeners, mutations := store.publishLocked(before, MutationTransaction, "atomic-group")
@@ -133,8 +134,11 @@ func atomicGroupNamed(_ string, ops ...AtomicOp) (err error) {
 	locked = 0
 	storeTransactionMu.Unlock()
 	transactionHeld = false
+	dispatched := make([]func(), 0, len(notifications))
 	for _, notification := range notifications {
-		notification.notify(transactionID)
+		notification := notification
+		dispatched = append(dispatched, func() { notification.notify(transactionID) })
 	}
+	runTransactionDispatch(transactionID, dispatched)
 	return nil
 }

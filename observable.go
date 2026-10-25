@@ -28,11 +28,14 @@ func validObservable[T any](source Observable[T]) bool {
 func (s *Store[T]) SubscribeSnapshot(fn func(Snapshot[T])) func()   { return s.Subscribe(fn) }
 func (r ReadOnly[T]) SubscribeSnapshot(fn func(Snapshot[T])) func() { return r.Subscribe(fn) }
 
-// Snapshot returns the memoized value and its accepted source version. Derived reference values are read-only; equality-suppressed changes still advance the version without notifying.
+// Snapshot returns the memoized value, its accepted source version and the
+// cross-store transaction that produced it. Derived reference values are
+// read-only; equality-suppressed changes still advance the version without
+// notifying.
 func (d *Derived[T, V]) Snapshot() Snapshot[V] {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return Snapshot[V]{Value: d.value, Version: d.version}
+	return Snapshot[V]{Value: d.value, Version: d.version, TransactionID: d.transactionID}
 }
 
 func (d *Derived[T, V]) SubscribeSnapshot(fn func(Snapshot[V])) func() {
@@ -61,14 +64,25 @@ type Pair[A, B any] struct {
 	Second B
 }
 
-// Combine derives a value from two stores or derived values. Inputs are eventually consistent, not an atomic cross-store snapshot; diamond graphs can publish intermediate values. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable.
+// Combine derives a value from two stores or derived values. Independent
+// writes are eventually consistent, while Atomic2 and AtomicGroup transaction
+// notifications are settled through the derived graph before downstream
+// callbacks run. Old source versions and obsolete computations cannot replace
+// newer ones. Close the returned derived value to detach both sources.
+// Projectors/comparators must be pure, concurrency-safe and keep source
+// references immutable.
 func Combine[A, B, V any](first Observable[A], second Observable[B], project func(A, B) V, equals func(V, V) bool) *Derived[Pair[A, B], V] {
 	if !validObservable(first) || !validObservable(second) || project == nil {
 		return &Derived[Pair[A, B], V]{closed: true}
 	}
 	a, b := first.Snapshot(), second.Snapshot()
 	var mu sync.Mutex
-	current := Snapshot[Pair[A, B]]{Value: Pair[A, B]{a.Value, b.Value}}
+	transactionID := uint64(0)
+	if a.TransactionID != 0 && a.TransactionID == b.TransactionID {
+		transactionID = a.TransactionID
+	}
+	current := Snapshot[Pair[A, B]]{Value: Pair[A, B]{a.Value, b.Value}, TransactionID: transactionID}
+	pendingTransactions := make(map[uint64]bool)
 	snapshot := func() Snapshot[Pair[A, B]] {
 		mu.Lock()
 		defer mu.Unlock()
@@ -97,10 +111,25 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 				return
 			}
 			a = next
-			current.Value.First, current.Version = next.Value, current.Version+1
+			current.Value.First, current.Version, current.TransactionID = next.Value, current.Version+1, next.TransactionID
 			value := current
+			transactionID := next.TransactionID
+			deferred := transactionID != 0 && !pendingTransactions[transactionID]
+			if deferred {
+				pendingTransactions[transactionID] = true
+			}
 			mu.Unlock()
-			fn(value)
+			if transactionID == 0 {
+				fn(value)
+			} else if deferred {
+				deferTransaction(transactionID, func() {
+					mu.Lock()
+					delete(pendingTransactions, transactionID)
+					value := current
+					mu.Unlock()
+					fn(value)
+				})
+			}
 		}
 		acceptB := func(next Snapshot[B]) {
 			mu.Lock()
@@ -109,10 +138,25 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 				return
 			}
 			b = next
-			current.Value.Second, current.Version = next.Value, current.Version+1
+			current.Value.Second, current.Version, current.TransactionID = next.Value, current.Version+1, next.TransactionID
 			value := current
+			transactionID := next.TransactionID
+			deferred := transactionID != 0 && !pendingTransactions[transactionID]
+			if deferred {
+				pendingTransactions[transactionID] = true
+			}
 			mu.Unlock()
-			fn(value)
+			if transactionID == 0 {
+				fn(value)
+			} else if deferred {
+				deferTransaction(transactionID, func() {
+					mu.Lock()
+					delete(pendingTransactions, transactionID)
+					value := current
+					mu.Unlock()
+					fn(value)
+				})
+			}
 		}
 		stops = append(stops, first.SubscribeSnapshot(acceptA))
 		stops = append(stops, second.SubscribeSnapshot(acceptB))

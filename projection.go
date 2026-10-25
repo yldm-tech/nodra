@@ -10,7 +10,7 @@ func Select[T, V any](source Reader[T], project func(T) V) Snapshot[V] {
 	}
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	return Snapshot[V]{Value: project(store.value), Version: store.version}
+	return Snapshot[V]{Value: project(store.value), Version: store.version, TransactionID: store.transactionID}
 }
 
 // SubscribeProjectionWith is an opt-in selector that borrows immutable source snapshots instead of cloning the entire Store per notification. project must be pure and concurrency-safe, must not retain or mutate source references, and must return independently owned projections. Callbacks must treat the current/previous projections as immutable. Equality, initialization and callback ordering match SubscribeSelectorWith. On default stores, source reference values must remain immutable as with any retained snapshot.
@@ -32,7 +32,7 @@ func SubscribeProjection[T, V any](source Reader[T], project func(T) V, fn func(
 func (store *Store[T]) borrowedSnapshot() Snapshot[T] {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	return Snapshot[T]{Value: store.value, Version: store.version}
+	return Snapshot[T]{Value: store.value, Version: store.version, TransactionID: store.transactionID}
 }
 func (store *Store[T]) subscribeBorrowed(fn func(Snapshot[T])) func() {
 	store.mu.Lock()

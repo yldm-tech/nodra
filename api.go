@@ -103,6 +103,7 @@ type Derived[T any, V any] struct {
 	mu                sync.RWMutex
 	value             V
 	version           uint64
+	transactionID     uint64
 	listeners         map[uint64]func(V)
 	snapshotListeners map[uint64]func(Snapshot[V])
 	nextID            uint64
@@ -135,17 +136,20 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 	initial := snapshot()
 	d.value = selector(initial.Value)
 	d.version = initial.Version
-	changed := func(snapshot Snapshot[T]) {
+	d.transactionID = initial.TransactionID
+	var pendingMu sync.Mutex
+	pendingTransactions := make(map[uint64]bool)
+	process := func(input Snapshot[T]) {
 		d.mu.RLock()
-		stale := d.closed || snapshot.Version <= d.version
+		stale := d.closed || input.Version <= d.version
 		d.mu.RUnlock()
 		if stale {
 			return
 		}
-		next := selector(snapshot.Value)
+		next := selector(input.Value)
 		for {
 			d.mu.RLock()
-			if d.closed || snapshot.Version <= d.version {
+			if d.closed || input.Version <= d.version {
 				d.mu.RUnlock()
 				return
 			}
@@ -153,7 +157,7 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 			d.mu.RUnlock()
 			equal := d.equals != nil && d.equals(old, next)
 			d.mu.Lock()
-			if d.closed || snapshot.Version <= d.version {
+			if d.closed || input.Version <= d.version {
 				d.mu.Unlock()
 				return
 			}
@@ -162,7 +166,8 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 				continue
 			}
 			// Advance even when equal, but only after comparison succeeds.
-			d.version = snapshot.Version
+			d.version = input.Version
+			d.transactionID = input.TransactionID
 			if equal {
 				d.mu.Unlock()
 				return
@@ -181,10 +186,30 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 				fn(next)
 			}
 			for _, fn := range snapshotListeners {
-				fn(Snapshot[V]{Value: next, Version: snapshot.Version})
+				fn(Snapshot[V]{Value: next, Version: input.Version, TransactionID: input.TransactionID})
 			}
 			return
 		}
+	}
+	changed := func(input Snapshot[T]) {
+		if input.TransactionID == 0 {
+			process(input)
+			return
+		}
+		pendingMu.Lock()
+		if pendingTransactions[input.TransactionID] {
+			pendingMu.Unlock()
+			return
+		}
+		pendingTransactions[input.TransactionID] = true
+		pendingMu.Unlock()
+		transactionID := input.TransactionID
+		deferTransaction(transactionID, func() {
+			pendingMu.Lock()
+			delete(pendingTransactions, transactionID)
+			pendingMu.Unlock()
+			process(input)
+		})
 	}
 	d.stop = subscribe(changed)
 	initialized := false

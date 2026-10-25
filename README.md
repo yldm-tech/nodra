@@ -66,7 +66,7 @@ stop := nodra.Invalidate(label, window)
 // At owner shutdown: stop(), then label.Close(), then canEdit.Close().
 ```
 
-Nest Combine calls for more inputs. Each source version advances independently: combinations converge to the latest observed inputs but are not cross-Store transactions. A diamond graph may emit an intermediate combination before both branches catch up. Keep values that require atomic updates in one Store. Constructors catch registration gaps; obsolete computations do not overwrite newer accepted results. Projectors and comparators must be pure and concurrency-safe, and derived reference values remain read-only. `DeriveProjection` can start a derived chain without full-source subscription clones. Closing a derived value detaches its inputs and freezes its last value; downstream owners still close their own derived values.
+Nest Combine calls for more inputs. Independent writes converge to the latest observed inputs and remain eventually consistent. `Atomic2` and `AtomicGroup` carry a transaction ID through the derived graph and settle a diamond before downstream callbacks run, so a transaction does not publish an intermediate combination. Constructors catch registration gaps; obsolete computations do not overwrite newer accepted results. Projectors and comparators must be pure and concurrency-safe, and derived reference values remain read-only. `DeriveProjection` can start a derived chain without full-source subscription clones. Closing a derived value detaches its inputs and freezes its last value; downstream owners still close their own derived values.
 
 For a transaction spanning more than two stores, prepare typed updates with `AtomicUpdate` and commit them with `AtomicGroup`:
 
