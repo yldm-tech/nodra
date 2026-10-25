@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/yldm-tech/nodra/compare/v0.9.0...v0.9.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **store:** preserve Patch errors ([#39](https://github.com/yldm-tech/nodra/issues/39)) ([60dd825](https://github.com/yldm-tech/nodra/commit/60dd825da297f64a260b28731f72b876539c40be))
+
 ## [0.9.0](https://github.com/yldm-tech/nodra/compare/v0.8.0...v0.9.0) (2026-10-25)
 
 
