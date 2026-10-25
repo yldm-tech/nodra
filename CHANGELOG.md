@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/yldm-tech/nodra/compare/v0.13.0...v0.13.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **ci:** verify aliased APIs and exact release commits ([#71](https://github.com/yldm-tech/nodra/issues/71)) ([ca6732a](https://github.com/yldm-tech/nodra/commit/ca6732a98ba6e0eca909a3dc4709914b9248184d))
+
 ## [0.13.0](https://github.com/yldm-tech/nodra/compare/v0.12.1...v0.13.0) (2026-10-25)
 
 
