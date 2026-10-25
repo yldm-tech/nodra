@@ -94,6 +94,8 @@ saving.
 
 Each `Persistence` instance serializes `Save` calls, taking the current state only after acquiring the save lock and holding it through encoding and storage. This prevents a slow older encode or write from replacing a newer save. Use one persistence instance per storage destination with ordinary FileStorage; separate instances and direct storage calls are not coordinated unless all writers explicitly use CheckedFileStorage. `Load` is a startup operation, not a transaction with concurrent store updates. It publishes the loaded value after decoding, so autosave subscriptions can safely save it again.
 
+`FileStorage.Journal` adds a two-phase crash record for applications that need startup recovery after a process or machine failure. The encoded bytes are written and synced to a journal first, the primary replacement and directory entry are synced next, and a checksum-verified commit marker is written last. A load promotes a committed journal before reading the primary; a journal without a commit marker is treated as an interrupted save and is ignored. Journal recovery protects the file replacement boundary; codec validation and application-level schema checks still run before Store replacement.
+
 Stopping `AutoSaveWithErrors` unsubscribes, closes the error channel and releases
 its background watcher even when the context and store remain open. An already
 running save may still finish after stop; stop does not drain pending writes.

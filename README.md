@@ -258,6 +258,7 @@ tasks.Update(func(value *[]Task) {
 - `Track` / `TrackWith` history with bounded undo/redo, recording filters and cross-frame edit groups
 - `Persistence[T]` with pluggable storage and codec interfaces
 - Ready-to-use `FileStorage` and `JSONCodec[T]` with atomic file replacement
+- Optional journaled FileStorage recovery for committed crash records
 - `VersionedJSONCodec[T]` with sequential schema migrations and explicit legacy JSON support
 - `AutoSaveWithErrors` for observable persistence failures
 - `AutoSaveAsync` for debounced, coalesced writes with `Flush`, `Close` and an error stream
@@ -342,7 +343,7 @@ successful migration is written by a subsequent `Save` or autosave.
 
 Enable `FileStorage{Path: path, Backup: true}` to write an independently replaced `path + ".bak"` copy after successful primary replacement. Backup I/O errors are returned; the primary may already have been saved when a backup fails. The two files are not one transaction. Keep one Persistence writer per destination, and reserve its `.bak` path for this backup. Applications must surface save errors rather than assume both files were updated.
 
-Set `FileStorage.Durable: true` to sync the containing directory after each rename. This adds filesystem latency but closes the rename-directory-entry crash window on platforms/filesystems that support directory fsync. Use `AESGCMCodec` around an inner codec when state must be encrypted; the envelope stores an algorithm, key ID, nonce and authenticated ciphertext, never plaintext. Add a new key to a `KeyProvider`, switch `Current`, then save to rotate. Historical key IDs remain readable until removed by the application. Nodra does not manage keychains or secret storage.
+Set `FileStorage.Durable: true` to sync the containing directory after each rename. This adds filesystem latency but closes the rename-directory-entry crash window on platforms/filesystems that support directory fsync. Set `FileStorage.Journal: true` when startup recovery from a committed crash record is required; an unfinished journal has no commit marker and is ignored, while a committed record is checksum-verified and promoted before Load returns. Journal mode adds filesystem writes and does not replace application-level validation. Use `AESGCMCodec` around an inner codec when state must be encrypted; the envelope stores an algorithm, key ID, nonce and authenticated ciphertext, never plaintext. Add a new key to a `KeyProvider`, switch `Current`, then save to rotate. Historical key IDs remain readable until removed by the application. Nodra does not manage keychains or secret storage.
 
 After a failed startup Load, stop and present that error before starting autosave. `persistence.LoadBackup(ctx)` explicitly validates and loads the backup into memory without rewriting either file. A later Save intentionally persists the recovered/current state. No silent fallback discards a corrupt original. Stores without a backup-capable backend return `ErrNoBackup`. Try `go run ./examples/persistent -file /path/to/state.json -recover-backup` to inspect recovery without modifying the files.
 
