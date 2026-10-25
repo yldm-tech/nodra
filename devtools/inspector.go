@@ -154,6 +154,7 @@ type Inspector struct {
 	token        string
 	server       *http.Server
 	done         chan struct{}
+	remote       bool
 	search       map[string]map[uint64]struct{}
 }
 
