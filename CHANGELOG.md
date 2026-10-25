@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.1](https://github.com/yldm-tech/nodra/compare/v0.11.0...v0.11.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **file:** discard uncommitted journal records ([#46](https://github.com/yldm-tech/nodra/issues/46)) ([ef0645f](https://github.com/yldm-tech/nodra/commit/ef0645fc14d9697550a9b6275cd53a64f8f841f9))
+* **invalidate:** ignore typed nil targets ([#49](https://github.com/yldm-tech/nodra/issues/49)) ([692a5ea](https://github.com/yldm-tech/nodra/commit/692a5eaa1f82e5fcfe1ea0271b43432ca4bd0bbd))
+* **persistence:** reset debounce on latest request ([#48](https://github.com/yldm-tech/nodra/issues/48)) ([556672f](https://github.com/yldm-tech/nodra/commit/556672f799b100103dbfb1a6268e9454d6a11a65))
+
 ## [0.11.0](https://github.com/yldm-tech/nodra/compare/v0.10.0...v0.11.0) (2026-10-25)
 
 
