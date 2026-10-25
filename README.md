@@ -2,6 +2,8 @@
 
 Nodra is a concurrency-safe reactive state store for Go desktop applications. It provides Zustand-like ergonomics for [MyGo](https://github.com/egoist/mygo) apps while keeping state independent from the renderer and persistence backend.
 
+[简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md)
+
 ## Install
 
 ```sh
