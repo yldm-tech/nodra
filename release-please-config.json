@@ -9,6 +9,10 @@
   "initial-version": "0.1.0",
   "bootstrap-sha": "5f262bc2edadd5d61815b07c71b899fd21019a62",
   "packages": {
-    ".": {}
+    ".": {
+      "exclude-paths": [
+        "site"
+      ]
+    }
   }
 }
