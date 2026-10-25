@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -109,6 +110,42 @@ func TestCheckedFileStorageBackupFailureAcknowledgesPrimary(t *testing.T) {
 	if string(raw) != "two" {
 		t.Fatal("retry backup not saved")
 	}
+}
+
+func TestCheckedFileStoragePreservesJournalProtocol(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.json")
+	file := FileStorage{Path: path, Journal: true, Backup: true}
+	storage := checkedStorage(t, file)
+	requireNoError(t, storage.Save(ctx, []byte("one")))
+	for _, suffix := range []string{".journal", ".commit"} {
+		if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("journal artifact %s remains after checked save: %v", suffix, err)
+		}
+	}
+	requireNoError(t, storage.Save(ctx, []byte("two")))
+	data, err := storage.Load(ctx)
+	requireNoError(t, err)
+	if string(data) != "two" {
+		t.Fatalf("checked journal load = %q", data)
+	}
+
+	// A committed journal left by a crash is recovered before conflict
+	// detection fingerprints the primary, so the writer cannot silently bypass
+	// the journal protocol.
+	if err := os.WriteFile(path+".journal", []byte("three"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte("three"))
+	if err := os.WriteFile(path+".commit", []byte(hex.EncodeToString(digest[:])), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, err = storage.Load(ctx)
+	requireNoError(t, err)
+	if string(data) != "three" {
+		t.Fatalf("checked journal recovery = %q", data)
+	}
+	requireNoError(t, storage.Save(ctx, []byte("four")))
 }
 
 func TestCheckedFileStorageConcurrentInstancesAndOneInstance(t *testing.T) {

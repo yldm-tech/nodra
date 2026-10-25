@@ -2,6 +2,8 @@ package nodra
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -55,5 +57,61 @@ func TestFileStorageDurableRenameAndEncryptedPersistence(t *testing.T) {
 	requireNoError(t, NewPersistence(restored, FileStorage{Path: path, Durable: true}, AESGCMCodec[int]{Inner: JSONCodec[int]{}, Keys: keys}).Load(context.Background()))
 	if restroredValue := restored.Get(); restroredValue != 42 {
 		t.Fatalf("restored=%d", restroredValue)
+	}
+}
+
+func TestJournaledFileStorageRoundTripAndCleanup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal", "state.json")
+	storage := FileStorage{Path: path, Journal: true, Backup: true}
+	if err := storage.Save(context.Background(), []byte(`{"count":4}`)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := storage.Load(context.Background())
+	if err != nil || string(data) != `{"count":4}` {
+		t.Fatalf("load=%q err=%v", data, err)
+	}
+	for _, suffix := range []string{".journal", ".commit"} {
+		if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("journal artifact %s remains: %v", suffix, err)
+		}
+	}
+}
+
+func TestJournaledFileStorageRecoversCommittedRecord(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	oldData, newData := []byte(`{"count":1}`), []byte(`{"count":2}`)
+	if err := os.WriteFile(path, oldData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".journal", newData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(newData)
+	if err := os.WriteFile(path+".commit", []byte(hex.EncodeToString(digest[:])), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := (FileStorage{Path: path, Journal: true}).Load(context.Background())
+	if err != nil || string(data) != string(newData) {
+		t.Fatalf("recovered=%q err=%v", data, err)
+	}
+	if _, err := os.Stat(path + ".commit"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("commit marker remains: %v", err)
+	}
+}
+
+func TestJournaledFileStorageIgnoresUncommittedRecord(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	oldData, pending := []byte(`{"count":1}`), []byte(`{"count":2}`)
+	if err := os.WriteFile(path, oldData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".journal", pending, 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := (FileStorage{Path: path, Journal: true}).Load(context.Background())
+	if err != nil || string(data) != string(oldData) {
+		t.Fatalf("load=%q err=%v", data, err)
 	}
 }
