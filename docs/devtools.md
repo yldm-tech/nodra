@@ -29,6 +29,8 @@ returns an idempotent detach function. IDs must be unique among current stores.
 
 For a controlled remote read-only session, use `ListenRemoteReadOnly("host:port")` with `AllowRestore` left false. Remote mode accepts authenticated GET snapshot/search requests and rejects restore, clear and every other write method. The capability token is still sent as a bearer header, so put a non-loopback listener behind TLS or another encrypted transport and restrict its network access. `ListenRemoteReadOnly` refuses an inspector configured with `AllowRestore: true`.
 
+Call `RotateToken` after changing the operator or network boundary. It invalidates every previously issued session URL and returns the replacement token; requests that already passed authentication may finish. Set `Options.RequestsPerSecond` to a positive value to cap authenticated API requests per inspector in one-second windows. The limit returns HTTP 429 with `Retry-After: 1`; zero keeps the historical unlimited behavior.
+
 ## Inspecting state and events
 
 - The sidebar lists heterogeneous stores and their current source versions.

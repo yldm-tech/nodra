@@ -39,8 +39,11 @@ type Options struct {
 	MaxStateBytes int
 	// MaxHistoryBytes budgets retained state/text plus event metadata (16 MiB).
 	MaxHistoryBytes int
-	AllowRestore    bool
-	Redact          func(storeID string, state json.RawMessage) (json.RawMessage, error)
+	// RequestsPerSecond limits authenticated API requests in a fixed one-second
+	// window. Zero disables the limit.
+	RequestsPerSecond int
+	AllowRestore      bool
+	Redact            func(storeID string, state json.RawMessage) (json.RawMessage, error)
 	// RedactMetadata filters names, task keys and error text before retention, including snapshots and pending progress. It must be concurrency-safe. Failure or panic discards all original metadata and records a fixed diagnostic. Store IDs are application-supplied public labels and are not filtered.
 	RedactMetadata func(storeID string, metadata Metadata) (Metadata, error)
 }
@@ -139,23 +142,25 @@ type attached struct {
 // model. Encoding occurs on the notifying goroutine; use it for development,
 // with immutable state or NewWithClone. Close releases subscriptions and server.
 type Inspector struct {
-	revision     uint64
-	cleared      uint64
-	paused       bool
-	skipped      uint64
-	mu           sync.Mutex
-	options      Options
-	stores       map[string]*attached
-	events       []Event
-	historyBytes int
-	dropped      uint64
-	next         uint64
-	closed       bool
-	token        string
-	server       *http.Server
-	done         chan struct{}
-	remote       bool
-	search       map[string]map[uint64]struct{}
+	revision      uint64
+	cleared       uint64
+	paused        bool
+	skipped       uint64
+	mu            sync.Mutex
+	options       Options
+	stores        map[string]*attached
+	events        []Event
+	historyBytes  int
+	dropped       uint64
+	next          uint64
+	closed        bool
+	token         string
+	server        *http.Server
+	done          chan struct{}
+	remote        bool
+	requestWindow time.Time
+	requestCount  int
+	search        map[string]map[uint64]struct{}
 }
 
 func New(options Options) *Inspector {
@@ -175,6 +180,24 @@ func New(options Options) *Inspector {
 		options.MaxHistoryBytes = 16 << 20
 	}
 	return &Inspector{options: options, stores: make(map[string]*attached), token: rand.Text(), search: make(map[string]map[uint64]struct{})}
+}
+
+// RotateToken invalidates every previously issued session URL and returns the
+// replacement capability token. In-flight requests that already passed
+// authentication are allowed to finish.
+func (i *Inspector) RotateToken() (string, error) {
+	if i == nil {
+		return "", ErrClosed
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.closed {
+		return "", ErrClosed
+	}
+	i.token = rand.Text()
+	i.requestWindow = time.Time{}
+	i.requestCount = 0
+	return i.token, nil
 }
 
 // Attach observes one typed store. IDs are explicit and unique, so unnamed and

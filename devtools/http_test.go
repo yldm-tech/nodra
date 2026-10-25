@@ -120,6 +120,50 @@ func TestHTTPRejectsInvalidRestoresAndMethods(t *testing.T) {
 	}
 }
 
+func TestHTTPTokenRotationInvalidatesOldCapability(t *testing.T) {
+	i := New(Options{})
+	defer func() { _ = i.Close() }()
+	old := i.token
+	newToken, err := i.RotateToken()
+	if err != nil || newToken == "" || newToken == old {
+		t.Fatalf("rotation old=%q new=%q err=%v", old, newToken, err)
+	}
+	requestWithToken := func(token string) int {
+		r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:12345/api/snapshot", nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		i.Handler().ServeHTTP(w, r)
+		return w.Code
+	}
+	if got := requestWithToken(old); got != http.StatusUnauthorized {
+		t.Fatalf("old token status=%d", got)
+	}
+	if got := requestWithToken(newToken); got != http.StatusOK {
+		t.Fatalf("new token status=%d", got)
+	}
+}
+
+func TestHTTPRateLimitAppliesAfterAuthentication(t *testing.T) {
+	i := New(Options{RequestsPerSecond: 1})
+	defer func() { _ = i.Close() }()
+	requestWithToken := func(token string) int {
+		r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:12345/api/snapshot", nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		i.Handler().ServeHTTP(w, r)
+		return w.Code
+	}
+	if got := requestWithToken(i.token); got != http.StatusOK {
+		t.Fatalf("first request status=%d", got)
+	}
+	if got := requestWithToken(i.token); got != http.StatusTooManyRequests {
+		t.Fatalf("second request status=%d", got)
+	}
+	if got := requestWithToken("wrong"); got != http.StatusUnauthorized {
+		t.Fatalf("unauthorized request status=%d", got)
+	}
+}
+
 func TestEmbeddedAssetsAndLoopbackServerLifecycle(t *testing.T) {
 	i := New(Options{})
 	for _, path := range []string{"/", "/app.js", "/style.css"} {
