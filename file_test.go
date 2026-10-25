@@ -114,4 +114,7 @@ func TestJournaledFileStorageIgnoresUncommittedRecord(t *testing.T) {
 	if err != nil || string(data) != string(oldData) {
 		t.Fatalf("load=%q err=%v", data, err)
 	}
+	if _, err := os.Stat(path + ".journal"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("uncommitted journal remains: %v", err)
+	}
 }

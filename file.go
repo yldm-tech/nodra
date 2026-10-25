@@ -125,6 +125,13 @@ func (f FileStorage) recoverJournal(ctx context.Context) error {
 	}
 	marker, err := os.ReadFile(f.commitPath())
 	if errors.Is(err, os.ErrNotExist) {
+		// A journal without its commit marker was interrupted before the primary replacement became recoverable; discard the stale record so repeated loads do not retain an unfinished transaction forever.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		return nil
 	}
 	if err != nil {
