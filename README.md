@@ -406,7 +406,8 @@ go run ./examples/persistent -file /path/to/state.json
 ## Repository layout
 
 ```text
-*.go                           store, history, persistence, MyGo invalidation, and tests (package nodra)
+api.go, doc.go                   root public facade and package documentation
+internal/core/                   store, history, persistence, MyGo invalidation, and tests
 devtools/                      optional inspector, local HTTP API and embedded browser UI
 examples/                      standalone and native MyGo examples
 docs/architecture.md           lifecycle and threading details
@@ -455,9 +456,9 @@ CI runs race tests and vet on Linux, macOS and Windows. It also runs golangci-li
 ### Fuzzing and benchmarks
 
 ```sh
-go test -run '^$' -fuzz=FuzzVersionedJSONDecode -fuzztime=30s -parallel=2 .
-go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=30s -parallel=2 .
-go test -run '^$' -bench=. -benchmem -count=10 . ./devtools
+go test -run '^$' -fuzz=FuzzVersionedJSONDecode -fuzztime=30s -parallel=2 ./internal/core
+go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=30s -parallel=2 ./internal/core
+go test -run '^$' -bench=. -benchmem -count=10 ./internal/core ./devtools
 ```
 
 Fuzzing checks accepted versioned/legacy JSON round trips and compares bounded undo/redo/batch operations with an independent state-machine model. Benchmarks report store updates with 0/1/100 listeners, full cloning of a 1,000-entry map, and selection of 1,000-element slices with default versus custom equality. Run repeated measurements on the same Go version, hardware and load before comparing changes. The CI `-benchtime=1x` run only checks execution. A separate performance workflow checks out the PR base and candidate on the same runner and runs identical compatibility workloads in alternating order, 10 samples each, with one toolchain and two CPUs. It uploads raw samples, environment details and benchstat comparisons. Candidate-only benchmarks measure derived pipelines, combinations, scheduling and inspector off/every/coalesced progress (128 reports per task). Timing changes are review evidence rather than a fixed hosted-runner pass/fail threshold.
