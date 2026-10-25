@@ -21,6 +21,13 @@ Redraw a native MyGo window whenever its store publishes:
 stop := nodra.Invalidate(store, window)
 ```
 
+For a custom native host or test fake, implement `InvalidationTarget` and use `InvalidateTarget`. The returned stop function remains the lifecycle boundary:
+
+```go
+stop := nodra.InvalidateTarget(store.ReadOnly(), target)
+defer stop()
+```
+
 The subscription stops automatically when the window closes. Call `stop()` to detach it earlier; repeated calls are safe. A hidden window stays subscribed so it can be shown again. Each window has its own subscription, and closing one does not close the shared Store.
 
 For a window that only displays part of the state, select that part so unrelated updates do not request a frame:
