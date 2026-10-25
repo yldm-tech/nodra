@@ -84,7 +84,7 @@ const RAW: Omit<Scenario, 'states'>[] = [
 	{
 		tab: ['异步 · 最新优先', 'Async LatestWins'],
 		start: { ver: 46, count: 10, win: 10, title: 'Hi' },
-		code: ['search := nodra.NewAsyncAction(store, work, apply)', 'search.Run(ctx, "no")     // #1', 'search.Run(ctx, "nodra")  // #2 取代 #1', '// #2 先完成 → 加锁、校验代际、提交', '// #1 迟到 → 被拒绝，绝不覆盖新结果'],
+		code: ['search, _ := nodra.NewAsyncAction(store, "search", work, apply)', 'search.Run(ctx, "no")     // #1', 'search.Run(ctx, "nodra")  // #2 取代 #1', '// #2 先完成 → 加锁、校验代际、提交', '// #1 迟到 → 被拒绝，绝不覆盖新结果'],
 		steps: [
 			{ t: ['启动 #1', 'Start run #1'], d: ['异步动作在所有锁之外执行耗时工作，例如一次网络搜索。', 'An AsyncAction runs work outside every lock — a network search, say.'], o: { tasks: [{ l: '#1 "no"', s: 'run' }], packets: [['Run #1', 'WIN', 'T1']], line: 1 } },
 			{ t: ['启动 #2，取代 #1', '#2 supersedes #1'], d: ['最新优先：新任务启动时，旧任务的上下文会被取消。', 'LatestWins: a newer run starts and the older run’s context is canceled.'], o: { tasks: [{ l: '#1 "no"', s: 'cancel' }, { l: '#2 "nodra"', s: 'run' }], packets: [['Run #2', 'WIN', 'T2']], line: 2 } },

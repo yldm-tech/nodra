@@ -1,4 +1,4 @@
-// API reference for the root package. Every signature below was checked against the v1.0.0 sources (api.go, internal/core, devtools).
+// API reference for the root package. Signatures, contract notes and examples were checked against the v1.1.0 sources (api.go, internal/core, devtools, docs/architecture.md); every example compiles against the module.
 
 type Pair = [zh: string, en: string];
 
@@ -32,7 +32,7 @@ export const UI = {
 		concurrency: '并发说明',
 		copy: '复制',
 		copied: '已复制',
-		footnote: '签名已对照 v1.0.0 源码核对；以 pkg.go.dev 上的文档为准。',
+		footnote: '签名、示例代码与行为说明均已对照 v1.1.0 源码核对，示例可直接编译；以 pkg.go.dev 上的文档为准。',
 		metaTitle: 'Nodra 文档 · API 参考',
 		metaDesc: 'Nodra 根包的完整方法索引与语义约定：Store、选择器、原子事务、撤销重做、持久化、异步动作与 MyGo 集成。',
 		ogImageAlt: 'Nodra 文档：根包 API 参考，含方法签名、行为约定与并发说明。',
@@ -53,7 +53,7 @@ export const UI = {
 		concurrency: 'CONCURRENCY',
 		copy: 'Copy',
 		copied: 'Copied',
-		footnote: 'Signatures are checked against the v1.0.0 sources; pkg.go.dev is authoritative.',
+		footnote: 'Signatures, examples and contract notes are checked against the v1.1.0 sources, and every example compiles; pkg.go.dev is authoritative.',
 		metaTitle: 'Nodra docs · API reference',
 		metaDesc: 'The method index and semantic contract of the Nodra root package: Store, selectors, atomic transactions, undo/redo, persistence, async actions and MyGo integration.',
 		ogImageAlt: 'Nodra docs: the root package API reference with signatures, contracts and concurrency notes.',
@@ -126,7 +126,7 @@ func main() {
 }`,
 		contract: [
 			['取消订阅函数是幂等的，可以安全地多次调用。', 'Unsubscribe functions are idempotent and safe to call more than once.'],
-			['Close 之后的写入会被 ErrClosed 拒绝；Close 本身也是幂等的。', 'Writes after Close are rejected with ErrClosed; Close itself is idempotent.'],
+			['Close 之后的写入会被 ErrClosed 拒绝；重复调用 Close 也返回 ErrClosed，最后的值仍可读取。', 'Writes after Close are rejected with ErrClosed; a repeated Close also returns ErrClosed, and the final value stays readable.'],
 		],
 	},
 	{
@@ -184,10 +184,10 @@ func main() {
 		methods: [
 			['Subscribe', 'func (s *Store[T]) Subscribe(fn func(Snapshot[T])) func()', '每次提交后调用；返回幂等的取消函数。', 'Called after every commit; returns an idempotent stop function.'],
 			['SubscribeWith', 'func (s *Store[T]) SubscribeWith(options SubscribeOptions[T], fn func(Snapshot[T])) func()', '可立即投递初始快照，并可按订阅者比较值。', 'Can deliver the initial snapshot and compare values per subscriber.'],
-			['SubscribeSnapshot', 'func (s *Store[T]) SubscribeSnapshot(fn func(Snapshot[T])) func()', '以快照形式接收版本与事务 ID。', 'Receives versions and transaction IDs as snapshots.'],
+			['SubscribeSnapshot', 'func (s *Store[T]) SubscribeSnapshot(fn func(Snapshot[T])) func()', '与 Subscribe 相同，是 Store、ReadOnly 与派生值共享的 Observable 接口方法；快照带版本号与事务 ID。', 'Same as Subscribe; it is the Observable method shared by Store, ReadOnly and derived values. Snapshots carry the version and transaction ID.'],
 			['SubscribeMutations', 'func (s *Store[T]) SubscribeMutations(fn func(Mutation[T])) func()', '变更元数据包含类型和之前的状态，对应 $subscribe。', 'Mutation metadata includes type and previous state, like $subscribe.'],
-			['Watch', 'func (s *Store[T]) Watch(ctx context.Context, buffer int) <-chan Snapshot[T]', '容量为 buffer 的有界快照通道，store 关闭时一并关闭。', 'Snapshot channel bounded by buffer, closed when the store closes.'],
-			['Close', 'func (s *Store[T]) Close() error', '移除订阅者并关闭活动的 Watch 流。幂等。', 'Removes subscribers and closes active watch streams. Idempotent.'],
+			['Watch', 'func (s *Store[T]) Watch(ctx context.Context, buffer int) <-chan Snapshot[T]', '容量为 buffer（至少为 1）的快照通道；满了时丢弃最旧的一条、保留最新快照；ctx 取消或 store 关闭时关闭。', 'Snapshot channel of capacity buffer (at least 1); when full it drops the oldest entry and keeps the newest; closed when ctx ends or the store closes.'],
+			['Close', 'func (s *Store[T]) Close() error', '移除订阅者并关闭活动的 Watch 流；最后的快照仍可读取，重复调用返回 ErrClosed。', 'Removes subscribers and closes active watch streams; the final snapshot stays readable and repeated calls return ErrClosed.'],
 		],
 		file: 'subscribe.go',
 		code: `stop := store.SubscribeWith(nodra.SubscribeOptions[State]{Immediate: true},
@@ -383,13 +383,13 @@ if err := writer.Close(shutdownCtx); err != nil {
 		title: ['异步动作', 'Async actions'],
 		lead: ['NewAsyncAction 创建可取消的「最新结果」或排队工作。工作在不持有任何锁的情况下执行，然后获取源写锁和代际锁检查所有权并应用结果。', 'NewAsyncAction creates cancelable latest-result or queued work. Work runs without locks, then takes the source write lock and generation lock to check ownership and apply its result.'],
 		methods: [
-			['NewAsyncAction', 'func NewAsyncAction[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error) (*AsyncAction[T, I, R], error)', '默认 LatestWins：较新的运行取代较旧的。', 'Defaults to LatestWins: newer runs supersede older ones.'],
-			['NewAsyncActionWithOptions', 'func NewAsyncActionWithOptions[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error, options ActionOptions[I]) (*AsyncAction[T, I, R], error)', 'QueueAll、Debounce、并发数、MaxAttempts、MaxBackoff 与 Idempotent。', 'QueueAll, Debounce, concurrency, MaxAttempts, MaxBackoff and Idempotent.'],
+			['NewAsyncAction', 'func NewAsyncAction[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error) (*AsyncAction[T, I, R], error)', '默认 LatestWins：新的运行以 ErrSuperseded 取消同一 Key 的上一个运行（未设置 Key 时共用一个 Key）。', 'Defaults to LatestWins: a new run cancels the previous run with the same Key with ErrSuperseded (a nil Key means one shared key).'],
+			['NewAsyncActionWithOptions', 'func NewAsyncActionWithOptions[T, I, R any](store *Store[T], name string, work func(context.Context, I, func(float64)) (R, error), apply func(*T, R) error, options ActionOptions[I]) (*AsyncAction[T, I, R], error)', 'ActionOptions：Policy（LatestWins / QueueAll）、Key、MaxConcurrent、QueueLimit、Debounce，以及 Retry（MaxAttempts、Backoff、MaxBackoff、Idempotent）。', 'ActionOptions: Policy (LatestWins / QueueAll), Key, MaxConcurrent, QueueLimit, Debounce and Retry (MaxAttempts, Backoff, MaxBackoff, Idempotent).'],
 			['Run', 'func (a *AsyncAction[T, I, R]) Run(ctx context.Context, input I) (*Task, error)', '每次运行拥有自己的 context 与完成通道。', 'Each run owns its context and completion channel.'],
 			['Status', 'func (a *AsyncAction[T, I, R]) Status() ReadOnly[AsyncState]', '独立的只读状态 Store。', 'A separate read-only status Store.'],
 			['Close', 'func (a *AsyncAction[T, I, R]) Close(ctx context.Context) error', 'Close 阻止新运行、取消所有运行并在 context 内等待。', 'Close prevents new runs, cancels all runs and waits within the context.'],
 			['Metrics / ExportMetrics', 'func (a *AsyncAction[T, I, R]) ExportMetrics(sink MetricsSink) error', '通过小型 MetricsSink 接口导出聚合计数；核心不依赖 Prometheus/OTel。', 'Exports aggregate counters through a small MetricsSink; the core imports neither Prometheus nor OTel.'],
-			['PanicError', 'type PanicError struct{ Value any }', '标识异步用户代码边界处的 panic。', 'Identifies panics at asynchronous user-code boundaries.'],
+			['PanicError', 'type PanicError struct{ Value any }', '标识异步回调、原子事务准备阶段与 Scope 清理中的 panic；普通同步通知的 panic 原样向上传播。', 'Identifies panics in asynchronous callbacks, atomic preparation and Scope cleanup; ordinary synchronous notification panics propagate unchanged.'],
 		],
 		file: 'search.go',
 		code: `search, err := nodra.NewAsyncAction(store, "search",
