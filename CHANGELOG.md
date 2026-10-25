@@ -1,6 +1,11 @@
 # Changelog
 
-## [0.9.1](https://github.com/yldm-tech/nodra/compare/v0.9.0...v0.9.1) (2026-10-25)
+## [0.10.0](https://github.com/yldm-tech/nodra/compare/v0.9.0...v0.10.0) (2026-10-25)
+
+
+### Features
+
+* **store:** add error-returning batches ([#40](https://github.com/yldm-tech/nodra/issues/40)) ([84bea3c](https://github.com/yldm-tech/nodra/commit/84bea3ce33251d6a865a498f0ad4674330a44fbd))
 
 
 ### Bug Fixes
