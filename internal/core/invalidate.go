@@ -7,10 +7,7 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// InvalidationTarget is the minimal redraw capability required by
-// InvalidateTarget. MyGo Window satisfies it, as do test fakes and other
-// native UI hosts. Implementations must make Invalidate safe to call from a
-// Store subscriber goroutine.
+// InvalidationTarget is the minimal redraw capability required by InvalidateTarget. MyGo Window satisfies it, as do test fakes and other native UI hosts. Implementations must make Invalidate safe to call from a Store subscriber goroutine.
 type InvalidationTarget interface {
 	Invalidate()
 }

@@ -23,8 +23,7 @@ func (JSONCodec[T]) Decode(data []byte) (T, error) {
 	return value, err
 }
 
-// FileStorage stores encoded state at Path. Save writes a temporary file in
-// the same directory and renames it into place, so readers see a complete file.
+// FileStorage stores encoded state at Path. Save writes a temporary file in the same directory and renames it into place, so readers see a complete file.
 type FileStorage struct {
 	Path string
 	Perm os.FileMode
@@ -32,9 +31,7 @@ type FileStorage struct {
 	Backup bool
 	// Durable syncs the containing directory after each rename. This makes the file name update durable across a crash on filesystems that support directory fsync. It may add latency and is opt-in for compatibility.
 	Durable bool
-	// Journal enables a two-phase crash recovery record. The journal is committed
-	// only after the primary rename and directory sync; an unfinished record is
-	// discarded on the next Load. It adds extra filesystem writes and is opt-in.
+	// Journal enables a two-phase crash recovery record. The journal is committed only after the primary rename and directory sync; an unfinished record is discarded on the next Load. It adds extra filesystem writes and is opt-in.
 	Journal bool
 }
 
@@ -93,8 +90,7 @@ func (f FileStorage) saveJournaled(ctx context.Context, data []byte, primarySave
 	if perm == 0 {
 		perm = 0600
 	}
-	// The journal is durable before the primary is replaced. A commit marker is
-	// written only after the replacement and directory entry are durable.
+	// The journal is durable before the primary is replaced. A commit marker is written only after the replacement and directory entry are durable.
 	durable := runtime.GOOS != "windows"
 	if err := writeAtomicFile(ctx, f.journalPath(), data, perm, durable); err != nil {
 		return err

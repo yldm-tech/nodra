@@ -79,8 +79,7 @@ func subscribeSelection[T, V any](snapshot func() Snapshot[T], subscribe func(fu
 			stop()
 		}
 	}()
-	// Catch changes between reading the initial value and registering. The
-	// version check also avoids recomputing when a callback already caught up.
+	// Catch changes between reading the initial value and registering. The version check also avoids recomputing when a callback already caught up.
 	changed(snapshot())
 	initialized = true
 	return stop
@@ -296,8 +295,7 @@ type ActionEvent struct {
 	Err       error
 }
 
-// ActionHooks observes action lifecycle events. Before runs before the
-// mutation; After runs only on success; Error runs only on failure.
+// ActionHooks observes action lifecycle events. Before runs before the mutation; After runs only on success; Error runs only on failure.
 type ActionHooks struct {
 	Before func(ActionEvent)
 	After  func(ActionEvent)
@@ -390,8 +388,7 @@ func (s *Store[T]) finishAction(event ActionEvent, hooks []ActionHooks, err erro
 	}
 }
 
-// Action returns a reusable named action function, matching Pinia action
-// definitions while keeping Go's explicit function types.
+// Action returns a reusable named action function, matching Pinia action definitions while keeping Go's explicit function types.
 func (s *Store[T]) Action(name string, fn func(*T) error) func() error {
 	return func() error { return s.Do(name, fn) }
 }

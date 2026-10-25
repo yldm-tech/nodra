@@ -58,8 +58,7 @@ func waitUntil(t *testing.T, timeout time.Duration, condition func() bool) {
 	t.Fatal("condition was not reached")
 }
 
-// TestPublicAPI exercises the root package from a separate module. It must not
-// reach internal/core or rely on repository-local replace/workspace settings.
+// TestPublicAPI exercises the root package from a separate module. It must not reach internal/core or rely on repository-local replace/workspace settings.
 func TestPublicAPI(t *testing.T) {
 	ctx := context.Background()
 	store := nodra.New(appState{Name: "initial", Items: []string{"a"}})

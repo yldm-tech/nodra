@@ -8,9 +8,7 @@ import (
 	"time"
 )
 
-// AtomicOp is one typed update in an AtomicGroup. Create operations with
-// AtomicUpdate; the fields are intentionally private so an operation cannot
-// be constructed without the store lock and rollback guarantees.
+// AtomicOp is one typed update in an AtomicGroup. Create operations with AtomicUpdate; the fields are intentionally private so an operation cannot be constructed without the store lock and rollback guarantees.
 type AtomicOp struct {
 	ptr         uintptr
 	newPrepared func() atomicParticipant
@@ -29,9 +27,7 @@ type atomicParticipant struct {
 	commit  func(uint64) atomicNotification
 }
 
-// AtomicUpdate prepares one store update for an AtomicGroup. The callback sees
-// a private candidate and may return an error to abort the complete group. It
-// must not call Store methods directly; use the provided pointer instead.
+// AtomicUpdate prepares one store update for an AtomicGroup. The callback sees a private candidate and may return an error to abort the complete group. It must not call Store methods directly; use the provided pointer instead.
 func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 	if store == nil || fn == nil {
 		return AtomicOp{}
@@ -54,8 +50,7 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 					if err := fn(&next); err != nil {
 						return err
 					}
-					// Clone before any participant is committed. A clone panic therefore
-					// cannot leave an earlier participant visible.
+					// Clone before any participant is committed. A clone panic therefore cannot leave an earlier participant visible.
 					next = store.copy(next)
 					prepared = next
 					return nil
@@ -75,11 +70,7 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 	}
 }
 
-// AtomicGroup commits any number of typed Store updates as one visibility
-// boundary. Every callback is prepared while all participating store locks are
-// held; an error or panic leaves every store unchanged. Lock order is stable
-// across calls, so groups built in opposite order cannot deadlock. Notifications
-// run after all locks are released and may safely reenter their stores.
+// AtomicGroup commits any number of typed Store updates as one visibility boundary. Every callback is prepared while all participating store locks are held; an error or panic leaves every store unchanged. Lock order is stable across calls, so groups built in opposite order cannot deadlock. Notifications run after all locks are released and may safely reenter their stores.
 func AtomicGroup(ops ...AtomicOp) (err error) {
 	return atomicGroupNamed("atomic-group", ops...)
 }

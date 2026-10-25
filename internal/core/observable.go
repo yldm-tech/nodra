@@ -37,10 +37,7 @@ func isNilInterface(value any) bool {
 func (s *Store[T]) SubscribeSnapshot(fn func(Snapshot[T])) func()   { return s.Subscribe(fn) }
 func (r ReadOnly[T]) SubscribeSnapshot(fn func(Snapshot[T])) func() { return r.Subscribe(fn) }
 
-// Snapshot returns the memoized value, its accepted source version and the
-// cross-store transaction that produced it. Derived reference values are
-// read-only; equality-suppressed changes still advance the version without
-// notifying.
+// Snapshot returns the memoized value, its accepted source version and the cross-store transaction that produced it. Derived reference values are read-only; equality-suppressed changes still advance the version without notifying.
 func (d *Derived[T, V]) Snapshot() Snapshot[V] {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -73,13 +70,7 @@ type Pair[A, B any] struct {
 	Second B
 }
 
-// Combine derives a value from two stores or derived values. Independent
-// writes are eventually consistent, while Atomic2 and AtomicGroup transaction
-// notifications are settled through the derived graph before downstream
-// callbacks run. Old source versions and obsolete computations cannot replace
-// newer ones. Close the returned derived value to detach both sources.
-// Projectors/comparators must be pure, concurrency-safe and keep source
-// references immutable.
+// Combine derives a value from two stores or derived values. Independent writes are eventually consistent, while Atomic2 and AtomicGroup transaction notifications are settled through the derived graph before downstream callbacks run. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable.
 func Combine[A, B, V any](first Observable[A], second Observable[B], project func(A, B) V, equals func(V, V) bool) *Derived[Pair[A, B], V] {
 	if !validObservable(first) || !validObservable(second) || project == nil {
 		return &Derived[Pair[A, B], V]{closed: true}

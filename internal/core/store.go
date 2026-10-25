@@ -16,9 +16,7 @@ var ErrClosed = errors.New("nodra: store is closed")
 var storeTransactionMu sync.RWMutex
 var nextTransactionID atomic.Uint64
 
-// Snapshot is a source value accepted at Version. TransactionID is non-zero
-// when the publication belongs to Atomic2 or AtomicGroup; derived sources
-// propagate it so one transaction can be settled before downstream delivery.
+// Snapshot is a source value accepted at Version. TransactionID is non-zero when the publication belongs to Atomic2 or AtomicGroup; derived sources propagate it so one transaction can be settled before downstream delivery.
 type Snapshot[T any] struct {
 	Value         T
 	Version       uint64
@@ -60,9 +58,7 @@ type Store[T any] struct {
 
 func New[T any](initial T) *Store[T] { return newStore("", initial) }
 
-// NewWithClone isolates owned state, snapshots, subscriber values and rollback
-// with clone. Clone must copy all mutable references, be safe for concurrent
-// calls, and must not reenter the store. A nil clone preserves New's behavior.
+// NewWithClone isolates owned state, snapshots, subscriber values and rollback with clone. Clone must copy all mutable references, be safe for concurrent calls, and must not reenter the store. A nil clone preserves New's behavior.
 func NewWithClone[T any](initial T, clone func(T) T) *Store[T] {
 	return newStoreWithClone("", initial, clone)
 }
@@ -122,8 +118,7 @@ func (s *Store[T]) updateNamed(name string, kind MutationType, fn func(*T) error
 	return s.updateCommitted(name, kind, fn, nil)
 }
 
-// updateCommitted keeps internal bookkeeping in the same commit as the source
-// version. committed runs under the store lock and must not invoke user code.
+// updateCommitted keeps internal bookkeeping in the same commit as the source version. committed runs under the store lock and must not invoke user code.
 func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) error, committed func(uint64), actionID ...uint64) error {
 	if fn == nil {
 		return errors.New("nodra: nil update")
@@ -143,8 +138,7 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 	}()
 	s.mu.Lock()
 	func() {
-		// Release the lock on update or clone panics without publishing a
-		// partially committed value. The candidate is not the owned state.
+		// Release the lock on update or clone panics without publishing a partially committed value. The candidate is not the owned state.
 		defer s.mu.Unlock()
 		if s.closed {
 			err = ErrClosed
@@ -155,8 +149,7 @@ func (s *Store[T]) updateCommitted(name string, kind MutationType, fn func(*T) e
 		if err = fn(&next); err != nil {
 			return
 		}
-		// Copy on commit too: a callback may retain its candidate or a caller
-		// may retain references passed to Set.
+		// Copy on commit too: a callback may retain its candidate or a caller may retain references passed to Set.
 		s.value = s.copy(next)
 		s.transactionID = 0
 		if s.batch > 0 {
@@ -256,9 +249,7 @@ func (s *Store[T]) publishLocked(before T, kind MutationType, name string) (Snap
 	return Snapshot[T]{Value: s.value, Version: s.version, TransactionID: s.transactionID}, s.listenersCopyLocked(), s.mutationListenersCopyLocked()
 }
 
-// Batch groups notifications from multiple updates into one final snapshot.
-// It does not roll back successful updates when fn returns an error; use
-// Atomic2 or AtomicGroup when the updates must commit as one transaction.
+// Batch groups notifications from multiple updates into one final snapshot. It does not roll back successful updates when fn returns an error; use Atomic2 or AtomicGroup when the updates must commit as one transaction.
 func (s *Store[T]) Batch(fn func()) error {
 	if fn == nil {
 		return nil
@@ -266,9 +257,7 @@ func (s *Store[T]) Batch(fn func()) error {
 	return s.BatchErr(func() error { fn(); return nil })
 }
 
-// BatchErr groups notifications like Batch and returns the callback's error.
-// Updates completed before an error remain committed, but their subscribers
-// are still notified once when the outermost batch ends.
+// BatchErr groups notifications like Batch and returns the callback's error. Updates completed before an error remain committed, but their subscribers are still notified once when the outermost batch ends.
 func (s *Store[T]) BatchErr(fn func() error) error {
 	if fn == nil {
 		return nil

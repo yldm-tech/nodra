@@ -130,9 +130,7 @@ func TestCheckedFileStoragePreservesJournalProtocol(t *testing.T) {
 		t.Fatalf("checked journal load = %q", data)
 	}
 
-	// A committed journal left by a crash is recovered before conflict
-	// detection fingerprints the primary, so the writer cannot silently bypass
-	// the journal protocol.
+	// A committed journal left by a crash is recovered before conflict detection fingerprints the primary, so the writer cannot silently bypass the journal protocol.
 	if err := os.WriteFile(path+".journal", []byte("three"), 0600); err != nil {
 		t.Fatal(err)
 	}

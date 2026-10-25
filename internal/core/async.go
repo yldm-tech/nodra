@@ -7,16 +7,12 @@ import (
 	"time"
 )
 
-// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge
-// delay for bursts of updates; zero starts immediately. Flush bypasses the delay.
+// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge delay for bursts of updates; zero starts immediately. Flush bypasses the delay.
 type AsyncOptions struct {
 	Debounce time.Duration
 }
 
-// AsyncPersistence owns one worker and a bounded error stream. It coalesces
-// updates without blocking writer goroutines on encoding or storage. Failed
-// writes remain pending; the next update or Flush retries them without spinning.
-// Values must be immutable or the store must use NewWithClone.
+// AsyncPersistence owns one worker and a bounded error stream. It coalesces updates without blocking writer goroutines on encoding or storage. Failed writes remain pending; the next update or Flush retries them without spinning. Values must be immutable or the store must use NewWithClone.
 type AsyncPersistence[T any] struct {
 	p           *Persistence[T]
 	ctx         context.Context
@@ -45,10 +41,7 @@ type AsyncPersistence[T any] struct {
 	saving      bool
 }
 
-// AutoSaveAsync subscribes and schedules the current state once, then all
-// subsequent versions. Use Close before closing the store to drain writes.
-// Parent cancellation and store closure stop the worker without a guaranteed
-// drain. Storage.Save must respect context cancellation to bound shutdown time.
+// AutoSaveAsync subscribes and schedules the current state once, then all subsequent versions. Use Close before closing the store to drain writes. Parent cancellation and store closure stop the worker without a guaranteed drain. Storage.Save must respect context cancellation to bound shutdown time.
 func (p *Persistence[T]) AutoSaveAsync(ctx context.Context, options AsyncOptions) (*AsyncPersistence[T], error) {
 	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) || options.Debounce < 0 {
 		return nil, ErrInvalidPersistence
@@ -77,8 +70,7 @@ func (p *Persistence[T]) AutoSaveAsync(ctx context.Context, options AsyncOptions
 	return a, nil
 }
 
-// Errors reports failed write attempts. The bounded stream may drop errors if
-// unread; Flush and Close return their write error directly. It closes on exit.
+// Errors reports failed write attempts. The bounded stream may drop errors if unread; Flush and Close return their write error directly. It closes on exit.
 func (a *AsyncPersistence[T]) Errors() <-chan error { return a.errors }
 
 func (a *AsyncPersistence[T]) pendingLocked() bool {
@@ -112,9 +104,7 @@ func (a *AsyncPersistence[T]) request(version uint64) {
 	a.publishStatus()
 }
 
-// Flush waits until the version visible when called has been saved, bypassing
-// debounce and retrying a previous failure. Canceling this wait does not cancel
-// the shared worker. Later updates may be included in the same write.
+// Flush waits until the version visible when called has been saved, bypassing debounce and retrying a previous failure. Canceling this wait does not cancel the shared worker. Later updates may be included in the same write.
 func (a *AsyncPersistence[T]) Flush(ctx context.Context) error {
 	return a.flush(ctx, false)
 }
@@ -150,8 +140,7 @@ func (a *AsyncPersistence[T]) flush(ctx context.Context, allowClosing bool) erro
 	a.publishStatus()
 	a.mu.Lock()
 	for {
-		// An overlapping Close may have stopped the worker after satisfying
-		// this barrier. Report the durable write, not a spurious cancellation.
+		// An overlapping Close may have stopped the worker after satisfying this barrier. Report the durable write, not a spurious cancellation.
 		if a.hasSaved && a.saved >= target {
 			a.mu.Unlock()
 			return nil
@@ -177,11 +166,7 @@ func (a *AsyncPersistence[T]) flush(ctx context.Context, allowClosing bool) erro
 	}
 }
 
-// Close stops observing updates, flushes the final observed state, then stops
-// the worker even if the flush fails. It is idempotent; concurrent callers wait
-// on the same result with their own context. Do not mutate the store concurrently
-// with Close if those changes must be included. Retry failed shutdown writes
-// with Persistence.Save; a closed async writer cannot be restarted.
+// Close stops observing updates, flushes the final observed state, then stops the worker even if the flush fails. It is idempotent; concurrent callers wait on the same result with their own context. Do not mutate the store concurrently with Close if those changes must be included. Retry failed shutdown writes with Persistence.Save; a closed async writer cannot be restarted.
 func (a *AsyncPersistence[T]) Close(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()

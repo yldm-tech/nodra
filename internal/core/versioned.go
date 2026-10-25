@@ -11,14 +11,10 @@ var (
 	ErrMissingMigration   = errors.New("nodra: missing schema migration")
 )
 
-// JSONMigration converts one schema version to the next. Inputs and outputs
-// are state JSON, without the version envelope. Return an error to abort Load.
+// JSONMigration converts one schema version to the next. Inputs and outputs are state JSON, without the version envelope. Return an error to abort Load.
 type JSONMigration func(json.RawMessage) (json.RawMessage, error)
 
-// VersionedJSONCodec stores {"schemaVersion": N, "state": ...}. Migrations[n]
-// upgrades version n to n+1, sequentially. AllowUnversioned accepts legacy raw
-// JSON as version zero. Version must be positive; future versions are rejected.
-// Decode never writes storage: persist a successful upgrade explicitly with Save.
+// VersionedJSONCodec stores {"schemaVersion": N, "state": ...}. Migrations[n] upgrades version n to n+1, sequentially. AllowUnversioned accepts legacy raw JSON as version zero. Version must be positive; future versions are rejected. Decode never writes storage: persist a successful upgrade explicitly with Save.
 type VersionedJSONCodec[T any] struct {
 	Version          int
 	Migrations       map[int]JSONMigration

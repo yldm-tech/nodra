@@ -7,9 +7,7 @@ import (
 	core "github.com/yldm-tech/nodra/internal/core"
 )
 
-// The root package is the stable public entry point. Implementations live in
-// internal/core so the repository can keep feature code together without
-// changing the import path used by applications.
+// The root package is the stable public entry point. Implementations live in internal/core so the repository can keep feature code together without changing the import path used by applications.
 
 var (
 	ErrNoUndo              = core.ErrNoUndo
@@ -97,9 +95,7 @@ type (
 	SelectorOptions[V any]    = core.SelectorOptions[V]
 	Snapshot[T any]           = core.Snapshot[T]
 	Storage                   = core.Storage
-	// Store owns versioned state and synchronously publishes snapshots to its observers.
-	// See Store methods in docs/public-api.md when the Go documentation renderer
-	// omits methods for this root-package alias.
+	// Store owns versioned state and synchronously publishes snapshots to its observers. See Store methods in docs/public-api.md when the Go documentation renderer omits methods for this root-package alias.
 	Store[T any]              = core.Store[T]
 	SubscribeOptions[T any]   = core.SubscribeOptions[T]
 	Task                      = core.Task
