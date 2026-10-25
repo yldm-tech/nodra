@@ -50,40 +50,42 @@ const (
 )
 
 type (
-	AESGCMCodec[T any]        = core.AESGCMCodec[T]
-	ActionEvent               = core.ActionEvent
-	ActionHooks               = core.ActionHooks
-	ActionMetrics             = core.ActionMetrics
-	ActionOptions[I any]      = core.ActionOptions[I]
-	ActionPolicy              = core.ActionPolicy
-	ActionTrace               = core.ActionTrace
-	AsyncAction[T, I, R any]  = core.AsyncAction[T, I, R]
-	AsyncOptions              = core.AsyncOptions
-	AsyncPersistence[T any]   = core.AsyncPersistence[T]
-	AsyncState                = core.AsyncState
-	AtomicOp                  = core.AtomicOp
-	CheckedFileStorage        = core.CheckedFileStorage
-	Codec[T any]              = core.Codec[T]
-	Definition[T any]         = core.Definition[T]
-	Derived[T, V any]         = core.Derived[T, V]
-	Field[T, V any]           = core.Field[T, V]
-	FileConflictError         = core.FileConflictError
-	FileFingerprint           = core.FileFingerprint
-	FileStorage               = core.FileStorage
-	History[T any]            = core.History[T]
-	HistoryOptions[T any]     = core.HistoryOptions[T]
-	HistoryState              = core.HistoryState
-	JSONCodec[T any]          = core.JSONCodec[T]
-	JSONMigration             = core.JSONMigration
-	KeyProvider               = core.KeyProvider
-	LoadError                 = core.LoadError
-	MemoryKeyProvider         = core.MemoryKeyProvider
-	MetricsSink               = core.MetricsSink
-	Mutation[T any]           = core.Mutation[T]
-	MutationType              = core.MutationType
-	Observable[T any]         = core.Observable[T]
-	Pair[A, B any]            = core.Pair[A, B]
-	PanicError                = core.PanicError
+	// AESGCMCodec encrypts another codec's bytes with authenticated AES-GCM.
+	AESGCMCodec[T any]       = core.AESGCMCodec[T]
+	ActionEvent              = core.ActionEvent
+	ActionHooks              = core.ActionHooks
+	ActionMetrics            = core.ActionMetrics
+	ActionOptions[I any]     = core.ActionOptions[I]
+	ActionPolicy             = core.ActionPolicy
+	ActionTrace              = core.ActionTrace
+	AsyncAction[T, I, R any] = core.AsyncAction[T, I, R]
+	AsyncOptions             = core.AsyncOptions
+	AsyncPersistence[T any]  = core.AsyncPersistence[T]
+	AsyncState               = core.AsyncState
+	AtomicOp                 = core.AtomicOp
+	CheckedFileStorage       = core.CheckedFileStorage
+	Codec[T any]             = core.Codec[T]
+	Definition[T any]        = core.Definition[T]
+	Derived[T, V any]        = core.Derived[T, V]
+	Field[T, V any]          = core.Field[T, V]
+	FileConflictError        = core.FileConflictError
+	FileFingerprint          = core.FileFingerprint
+	FileStorage              = core.FileStorage
+	History[T any]           = core.History[T]
+	HistoryOptions[T any]    = core.HistoryOptions[T]
+	HistoryState             = core.HistoryState
+	JSONCodec[T any]         = core.JSONCodec[T]
+	JSONMigration            = core.JSONMigration
+	KeyProvider              = core.KeyProvider
+	LoadError                = core.LoadError
+	MemoryKeyProvider        = core.MemoryKeyProvider
+	MetricsSink              = core.MetricsSink
+	Mutation[T any]          = core.Mutation[T]
+	MutationType             = core.MutationType
+	Observable[T any]        = core.Observable[T]
+	Pair[A, B any]           = core.Pair[A, B]
+	PanicError               = core.PanicError
+	// Persistence connects a Store to a byte Storage and Codec.
 	Persistence[T any]        = core.Persistence[T]
 	PersistenceOptions[T any] = core.PersistenceOptions[T]
 	PersistenceState          = core.PersistenceState
@@ -95,6 +97,9 @@ type (
 	SelectorOptions[V any]    = core.SelectorOptions[V]
 	Snapshot[T any]           = core.Snapshot[T]
 	Storage                   = core.Storage
+	// Store owns versioned state and synchronously publishes snapshots to its observers.
+	// See Store methods in docs/public-api.md when the Go documentation renderer
+	// omits methods for this root-package alias.
 	Store[T any]              = core.Store[T]
 	SubscribeOptions[T any]   = core.SubscribeOptions[T]
 	Task                      = core.Task

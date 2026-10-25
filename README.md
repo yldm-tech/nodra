@@ -442,16 +442,23 @@ go run ./examples/devtools -restore
 
 ## Verification
 
+The [public API reference](docs/public-api.md) is the method index for the
+root package, including generic aliases whose methods some `go doc` renderers
+do not expand. The [support matrix](docs/support.md) defines the Go, MyGo,
+platform, architecture and filesystem combinations covered by the v1 release
+contract.
+
 ```sh
 go test -race ./...
 go vet ./...
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
 Run the native MyGo example with `go run ./examples/mygo`.
 
 CI compares public APIs with the PR base using a pinned `golang.org/x/exp/cmd/apidiff` and runs `scripts/check-consumer.sh` in a temporary independent module with `GOWORK=off`. Post-release verification runs the same consumer against the version downloaded through the Go proxy, without a local replace. To reproduce API comparison, set `APIDIFF` to the installed tool and run `bash scripts/check-api.sh /path/to/base-checkout`. Intentional incompatible changes require an exact incompatible report in `.github/api-changes/<base-commit-sha>.txt` plus migration guidance in the PR; unrelated or stale approvals cannot hide additional changes. This checks source compatibility, not runtime semantics or behavior of every downstream application.
 
-CI runs race tests and vet on Linux, macOS and Windows. It also runs golangci-lint, two 10-second fuzz targets, benchmark smoke tests, cross builds for Linux and Windows, and checks that the module path is `github.com/yldm-tech/nodra`, that there is no other `go.mod`, `go.work` or `replace` directive, and that `go mod tidy` leaves no diff.
+CI runs race tests and vet on Linux, macOS and Windows. It also runs golangci-lint, govulncheck, two 10-second fuzz targets, benchmark smoke tests, amd64 and arm64 pure-Go cross builds for Linux and Windows, and checks that the module path is `github.com/yldm-tech/nodra`, that there is no other `go.mod`, `go.work` or `replace` directive, and that `go mod tidy` leaves no diff.
 
 ### Fuzzing and benchmarks
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Maintenance
+
+* define the v1 public API, support, callback, DevTools and security release gates
+* raise the minimum Go toolchain to 1.27.3 for the current standard-library security fix
+
 ## [0.12.1](https://github.com/yldm-tech/nodra/compare/v0.12.0...v0.12.1) (2026-10-25)
 
 
