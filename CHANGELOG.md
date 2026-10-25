@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/yldm-tech/nodra/compare/v0.7.0...v0.8.0) (2026-10-25)
+
+
+### Features
+
+* harden transactions retries persistence and DevTools ([#29](https://github.com/yldm-tech/nodra/issues/29)) ([ae923af](https://github.com/yldm-tech/nodra/commit/ae923affcfdc96827295aff19d93389ab2c13d3c))
+* settle derived state across atomic transactions ([#31](https://github.com/yldm-tech/nodra/issues/31)) ([f2ac9e0](https://github.com/yldm-tech/nodra/commit/f2ac9e057e739cab70ec6dbb2d3db814d055a56c))
+
 ## [0.7.0](https://github.com/yldm-tech/nodra/compare/v0.6.0...v0.7.0) (2026-10-24)
 
 
