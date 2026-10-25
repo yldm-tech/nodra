@@ -59,7 +59,12 @@ func (r ReadOnly[T]) Version() uint64 {
 	}
 	return r.store.Version()
 }
-func (r ReadOnly[T]) ID() string            { return r.store.ID() }
+func (r ReadOnly[T]) ID() string {
+	if r.store == nil {
+		return ""
+	}
+	return r.store.ID()
+}
 func (r ReadOnly[T]) Done() <-chan struct{} { return r.store.Done() }
 func (r ReadOnly[T]) Subscribe(fn func(Snapshot[T])) func() {
 	return r.SubscribeWith(SubscribeOptions[T]{}, fn)
