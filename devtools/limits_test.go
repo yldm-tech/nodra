@@ -67,3 +67,16 @@ func TestSingleEventAboveHistoryBudgetKeepsCurrentState(t *testing.T) {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
 }
+
+func TestCustomEventDataCountsTowardHistoryBudget(t *testing.T) {
+	inspector := New(Options{MaxHistoryBytes: 512})
+	defer func() { _ = inspector.Close() }()
+	mustAttach(t, inspector, "counter", nodra.New(1))
+	if err := inspector.Record("counter", CustomEvent{Kind: "diagnostic", Data: json.RawMessage(`{"payload":"` + strings.Repeat("x", 1024) + `"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := inspector.Snapshot()
+	if len(snapshot.Events) != 1 || snapshot.Events[0].Kind != "snapshot" || snapshot.Retention.Dropped != 1 || snapshot.Retention.Bytes > 512 {
+		t.Fatalf("custom event exceeded history budget: %+v", snapshot)
+	}
+}
