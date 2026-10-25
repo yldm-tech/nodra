@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -85,14 +86,15 @@ func (f FileStorage) saveJournaled(ctx context.Context, data []byte) error {
 	}
 	// The journal is durable before the primary is replaced. A commit marker is
 	// written only after the replacement and directory entry are durable.
-	if err := writeAtomicFile(ctx, f.journalPath(), data, perm, true); err != nil {
+	durable := runtime.GOOS != "windows"
+	if err := writeAtomicFile(ctx, f.journalPath(), data, perm, durable); err != nil {
 		return err
 	}
-	if err := writeAtomicFile(ctx, f.Path, data, perm, true); err != nil {
+	if err := writeAtomicFile(ctx, f.Path, data, perm, durable); err != nil {
 		return fmt.Errorf("nodra: replace %s: %w", f.Path, err)
 	}
 	digest := sha256.Sum256(data)
-	if err := writeAtomicFile(ctx, f.commitPath(), []byte(hex.EncodeToString(digest[:])), 0600, true); err != nil {
+	if err := writeAtomicFile(ctx, f.commitPath(), []byte(hex.EncodeToString(digest[:])), 0600, durable); err != nil {
 		return err
 	}
 	if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -101,8 +103,10 @@ func (f FileStorage) saveJournaled(ctx context.Context, data []byte) error {
 	if err := os.Remove(f.commitPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := syncDirectory(dir); err != nil {
-		return fmt.Errorf("nodra: sync %s after journal cleanup: %w", dir, err)
+	if durable {
+		if err := syncDirectory(dir); err != nil {
+			return fmt.Errorf("nodra: sync %s after journal cleanup: %w", dir, err)
+		}
 	}
 	if f.Backup {
 		if err := (FileStorage{Path: f.Path + ".bak", Perm: f.Perm, Durable: f.Durable}).Save(ctx, data); err != nil {
@@ -135,7 +139,7 @@ func (f FileStorage) recoverJournal(ctx context.Context) error {
 	if perm == 0 {
 		perm = 0600
 	}
-	if err := writeAtomicFile(ctx, f.Path, journal, perm, true); err != nil {
+	if err := writeAtomicFile(ctx, f.Path, journal, perm, runtime.GOOS != "windows"); err != nil {
 		return fmt.Errorf("nodra: recover %s: %w", f.Path, err)
 	}
 	if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -144,7 +148,10 @@ func (f FileStorage) recoverJournal(ctx context.Context) error {
 	if err := os.Remove(f.commitPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return syncDirectory(filepath.Dir(f.Path))
+	if runtime.GOOS != "windows" {
+		return syncDirectory(filepath.Dir(f.Path))
+	}
+	return nil
 }
 
 func writeAtomicFile(ctx context.Context, path string, data []byte, perm os.FileMode, durable bool) (err error) {
