@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.1](https://github.com/yldm-tech/nodra/compare/v0.12.0...v0.12.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* guard nil memory key providers ([#55](https://github.com/yldm-tech/nodra/issues/55)) ([15d7e72](https://github.com/yldm-tech/nodra/commit/15d7e725302b4ceb68f8693711653d3a92b0f120))
+* include custom data in inspector budget ([#60](https://github.com/yldm-tech/nodra/issues/60)) ([90d2a36](https://github.com/yldm-tech/nodra/commit/90d2a36f635523959c9bfefd8ea78203ce04fbd0))
+* make zero read-only views safe ([#56](https://github.com/yldm-tech/nodra/issues/56)) ([dfdd0c3](https://github.com/yldm-tech/nodra/commit/dfdd0c38143c597828a7a3a391053879ab337d0b))
+* reject all typed-nil invalidation targets ([#54](https://github.com/yldm-tech/nodra/issues/54)) ([bdfecc9](https://github.com/yldm-tech/nodra/commit/bdfecc9152b63f8e92e1d08446570d4f8bb3d5df))
+* reject empty encryption key IDs ([#58](https://github.com/yldm-tech/nodra/issues/58)) ([a1b5e8b](https://github.com/yldm-tech/nodra/commit/a1b5e8b36951d6dc445b9e8dcd6ddbf23abe3389))
+
 ## [0.12.0](https://github.com/yldm-tech/nodra/compare/v0.11.1...v0.12.0) (2026-10-25)
 
 
