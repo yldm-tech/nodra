@@ -432,6 +432,10 @@ go run ./examples/devtools -restore
 
 The [public API reference](docs/public-api.md) is the method index for the root package, including generic aliases whose methods some `go doc` renderers do not expand. The [support matrix](docs/support.md) defines the Go, MyGo, platform, architecture and filesystem combinations covered by the v1 release contract.
 
+## Complete example project
+
+[`examples/workbench`](examples/workbench/README.md) is the full runnable Nodra + MyGo project. It combines cloned state, local drafts, validated backup persistence, debounced and cancelable async search, async saves, scoped shutdown, native invalidation and optional DevTools. Run `go run ./examples/workbench` for the desktop app or add `-devtools` to print an authenticated local inspector URL.
+
 ```sh
 go test -race ./...
 go vet ./...
