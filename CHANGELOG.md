@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Dependencies
+
+* support MyGo 0.7.2; go.mod now requires it instead of 0.6.3, and the invalidation helpers keep the same signatures and behaviour
+
 ### Documentation
 
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy

@@ -64,7 +64,7 @@ stop := nodra.InvalidateSelector(store, window, func(s State) int {
 defer stop()
 ```
 
-The integration targets MyGo `v0.6.3`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
+The integration targets MyGo `v0.7.2`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
 
 ## Persistence
 
@@ -130,4 +130,4 @@ golangci-lint run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-Nodra is one Go module: `github.com/yldm-tech/nodra`. The project requires Go `1.27.3` or newer and uses MyGo `v0.6.3` for native integration.
+Nodra is one Go module: `github.com/yldm-tech/nodra`. The project requires Go `1.27.3` or newer and uses MyGo `v0.7.2` for native integration.

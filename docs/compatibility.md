@@ -12,7 +12,7 @@ The v0.x contract includes only behavior stated in package documentation and tes
 
 ## v1
 
-The v1.0 release stabilizes the exported root-package and DevTools Go APIs, the `Reader` and `Observable` contracts, persistence interfaces and codecs, and the documented ownership, versioning, rollback, shutdown, and transaction semantics. A v1 minor release will not remove or change the meaning of an exported identifier. Additions remain source-compatible and may introduce new optional fields or interfaces. The supported baseline is Go 1.27.3 and MyGo 0.6.3, with the native and cross-build targets listed in [support.md](support.md).
+The v1.0 release stabilizes the exported root-package and DevTools Go APIs, the `Reader` and `Observable` contracts, persistence interfaces and codecs, and the documented ownership, versioning, rollback, shutdown, and transaction semantics. A v1 minor release will not remove or change the meaning of an exported identifier. Additions remain source-compatible and may introduce new optional fields or interfaces. The supported baseline is Go 1.27.3 and MyGo 0.7.2, with the native and cross-build targets listed in [support.md](support.md).
 
 An exported API can still evolve in a v1 minor release when the change only adds a method to an interface that Nodra does not ask applications to implement. Interfaces intended for application implementations are kept minimal; adding a method to those interfaces is a breaking change and requires a major release or a new interface.
 

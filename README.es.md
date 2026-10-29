@@ -46,7 +46,7 @@ stop := nodra.InvalidateSelector(store, window, func(s State) int { return s.Cou
 defer stop()
 ```
 
-La integración usa MyGo `v0.6.3`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para un ejemplo mínimo.
+La integración usa MyGo `v0.7.2`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para un ejemplo mínimo.
 
 ## Ejemplo completo
 
@@ -74,4 +74,4 @@ go test -race ./...
 go vet ./...
 ```
 
-El proyecto requiere Go `1.27.3+` y usa MyGo `v0.6.3` para la integración nativa.
+El proyecto requiere Go `1.27.3+` y usa MyGo `v0.7.2` para la integración nativa.
