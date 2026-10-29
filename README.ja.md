@@ -46,7 +46,7 @@ stop := nodra.InvalidateSelector(store, window, func(s State) int { return s.Cou
 defer stop()
 ```
 
-MyGo の対象バージョンは `v0.6.3` です。一時的なウィジェット状態はビュー所有者に置き、共有状態には編集したフィールドだけを書き戻します。最小例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
+MyGo の対象バージョンは `v0.7.2` です。一時的なウィジェット状態はビュー所有者に置き、共有状態には編集したフィールドだけを書き戻します。最小例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
 
 ## 完全なサンプル
 
@@ -74,4 +74,4 @@ go test -race ./...
 go vet ./...
 ```
 
-Go `1.27.3` 以上と MyGo `v0.6.3` を使用します。
+Go `1.27.3` 以上と MyGo `v0.7.2` を使用します。

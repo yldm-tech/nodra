@@ -46,7 +46,7 @@ stop := nodra.InvalidateSelector(store, window, func(s State) int { return s.Cou
 defer stop()
 ```
 
-MyGo 대상 버전은 `v0.6.3`입니다. 임시 위젯 상태는 뷰 소유자에 두고 공유 Store에는 수정된 필드만 반영하세요. 최소 예제는 [`examples/mygo`](examples/mygo/main.go)에서 확인할 수 있습니다.
+MyGo 대상 버전은 `v0.7.2`입니다. 임시 위젯 상태는 뷰 소유자에 두고 공유 Store에는 수정된 필드만 반영하세요. 최소 예제는 [`examples/mygo`](examples/mygo/main.go)에서 확인할 수 있습니다.
 
 ## 완전한 예제
 
@@ -74,4 +74,4 @@ go test -race ./...
 go vet ./...
 ```
 
-Go `1.27.3` 이상과 MyGo `v0.6.3`을 사용합니다.
+Go `1.27.3` 이상과 MyGo `v0.7.2`을 사용합니다.

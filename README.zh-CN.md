@@ -46,7 +46,7 @@ stop := nodra.InvalidateSelector(store, window, func(s State) int { return s.Cou
 defer stop()
 ```
 
-MyGo 集成目标版本是 `v0.6.3`。临时控件状态应放在视图所有者中，共享业务状态只提交实际编辑的字段。参见 [`examples/mygo`](examples/mygo/main.go)。
+MyGo 集成目标版本是 `v0.7.2`。临时控件状态应放在视图所有者中，共享业务状态只提交实际编辑的字段。参见 [`examples/mygo`](examples/mygo/main.go)。
 
 ## 完整示例
 
@@ -74,4 +74,4 @@ go test -race ./...
 go vet ./...
 ```
 
-项目要求 Go `1.27.3+`，原生集成使用 MyGo `v0.6.3`。
+项目要求 Go `1.27.3+`，原生集成使用 MyGo `v0.7.2`。
