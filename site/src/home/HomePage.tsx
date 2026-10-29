@@ -222,7 +222,7 @@ function HomeFooter({ lang }: { lang: Lang }) {
 				<div className='col-span-2 flex min-w-0 flex-col gap-3.5'>
 					<span className='text-[22px] font-bold tracking-[-0.035em]'>nodra</span>
 					<span className='max-w-[360px] text-sm leading-[1.7] text-fg-4'>{t.ftTag}</span>
-					<span className='font-mono text-xs text-fg-5'>Go 1.27.3+ · MyGo v0.6.3 · MIT</span>
+					<span className='font-mono text-xs text-fg-5'>Go 1.27.3+ · MyGo v0.7.2 · MIT</span>
 				</div>
 				<nav aria-label={t.ftDocs} className={footCol}>
 					<span className={footHead}>{t.ftDocs}</span>

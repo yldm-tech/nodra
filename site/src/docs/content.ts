@@ -80,7 +80,7 @@ export const SECTIONS: DocSection[] = [
 		contract: [
 			['唯一受支持的导入路径是 github.com/yldm-tech/nodra；根包重新导出 internal/core 的实现类型，应用无需了解仓库布局。', 'The supported import path is github.com/yldm-tech/nodra. The root package re-exports implementation types from internal/core, so applications need no knowledge of the repository layout.'],
 			['可选的检查器位于 github.com/yldm-tech/nodra/devtools，核心包不依赖它。', 'The optional inspector lives in github.com/yldm-tech/nodra/devtools; the core does not import it.'],
-			['需要 Go 1.27.3 或更新版本；原生集成基于 MyGo v0.6.3。', 'Requires Go 1.27.3 or newer; native integration targets MyGo v0.6.3.'],
+			['需要 Go 1.27.3 或更新版本；原生集成基于 MyGo v0.7.2。', 'Requires Go 1.27.3 or newer; native integration targets MyGo v0.7.2.'],
 		],
 	},
 	{
