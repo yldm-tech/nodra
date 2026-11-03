@@ -1,13 +1,12 @@
 import { Await } from '@tanstack/react-router';
-import type { Lang } from '../lib/lang';
-import { REPO_URL } from '../lib/lang';
+import { projectRegistrationUrl, type Lang, REPO_URL } from '../lib/lang';
 import type { AdoptionStats as Stats } from '../lib/stats';
 
 const PKG = 'https://pkg.go.dev/github.com/yldm-tech/nodra';
 
 const LABEL = {
-	zh: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `pkg.go.dev 已知导入 ${n.toLocaleString('en-US')} 个包`, importedTitle: '仅统计 pkg.go.dev 已索引的公开导入方', aria: '项目数据' },
-	en: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `known pkg.go.dev importers: ${n.toLocaleString('en-US')}`, importedTitle: 'Counts public importers indexed by pkg.go.dev', aria: 'Project stats' },
+	zh: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `pkg.go.dev 已知导入 ${n.toLocaleString('en-US')} 个包`, importedTitle: '仅统计 pkg.go.dev 已索引的公开导入方', register: '你的项目也在用？登记一下 →', aria: '项目数据' },
+	en: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `known pkg.go.dev importers: ${n.toLocaleString('en-US')}`, importedTitle: 'Counts public importers indexed by pkg.go.dev', register: 'Using Nodra? Register your project →', aria: 'Project stats' },
 };
 
 const item = 'text-fg-5 hover:text-fg';
@@ -44,6 +43,9 @@ export function AdoptionStats({ stats, lang }: { stats: Promise<Stats>; lang: La
 					);
 				}}
 			</Await>
+			<a href={projectRegistrationUrl(lang)} className='mt-1 inline-block text-fg-5 underline decoration-fg/25 underline-offset-4 hover:text-lime hover:decoration-lime'>
+				{t.register}
+			</a>
 		</div>
 	);
 }

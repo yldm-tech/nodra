@@ -42,3 +42,12 @@ export function useSetLang(): (lang: Lang) => void {
 
 export const INSTALL_CMD = 'go get github.com/yldm-tech/nodra@latest';
 export const REPO_URL = 'https://github.com/yldm-tech/nodra';
+
+export function projectRegistrationUrl(lang: Lang): string {
+	const title = lang === 'en' ? 'Register a project using Nodra' : '登记使用 Nodra 的项目';
+	const body =
+		lang === 'en'
+			? 'Project name:\nProject URL:\nHow you use Nodra:\nMay we list this project on the Nodra website? (yes/no)\n\nPlease do not include private or sensitive information.'
+			: '项目名称：\n项目链接：\n如何使用 Nodra：\n是否同意在 Nodra 官网展示此项目？（是/否）\n\n请勿提交私密或敏感信息。';
+	return `${REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+}
