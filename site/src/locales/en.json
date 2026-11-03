@@ -118,5 +118,13 @@
   "registration": {
     "title": "Register a project using Nodra",
     "body": "Project name:\nProject URL:\nHow you use Nodra:\nMay we list this project on the Nodra website? (yes/no)\n\nPlease do not include private or sensitive information."
+  },
+  "projects": {
+    "kicker": "PROJECTS",
+    "title": "Projects using Nodra",
+    "lead": "These projects show Nodra in real use. Register yours and we can add it here after review.",
+    "official": "Official example",
+    "view": "View project →",
+    "register": "Register your project →"
   }
 }

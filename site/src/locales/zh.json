@@ -118,5 +118,13 @@
   "registration": {
     "title": "登记使用 Nodra 的项目",
     "body": "项目名称：\n项目链接：\n如何使用 Nodra：\n是否同意在 Nodra 官网展示此项目？（是/否）\n\n请勿提交私密或敏感信息。"
+  },
+  "projects": {
+    "kicker": "项目展示",
+    "title": "正在使用 Nodra 的项目",
+    "lead": "这些项目已公开展示 Nodra 的使用方式。你的项目也在用？登记后，我们会在审核通过后加入这里。",
+    "official": "官方示例",
+    "view": "查看项目 →",
+    "register": "登记你的项目 →"
   }
 }
