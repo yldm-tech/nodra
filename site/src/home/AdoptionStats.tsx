@@ -1,19 +1,15 @@
 import { Await } from '@tanstack/react-router';
+import { LOCALES } from '../lib/i18n';
 import { projectRegistrationUrl, type Lang, REPO_URL } from '../lib/lang';
 import type { AdoptionStats as Stats } from '../lib/stats';
 
 const PKG = 'https://pkg.go.dev/github.com/yldm-tech/nodra';
 
-const LABEL = {
-	zh: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `pkg.go.dev 已知导入 ${n.toLocaleString('en-US')} 个包`, importedTitle: '仅统计 pkg.go.dev 已索引的公开导入方', register: '你的项目也在用？登记一下 →', aria: '项目数据' },
-	en: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `known pkg.go.dev importers: ${n.toLocaleString('en-US')}`, importedTitle: 'Counts public importers indexed by pkg.go.dev', register: 'Using Nodra? Register your project →', aria: 'Project stats' },
-};
-
 const item = 'text-fg-5 hover:text-fg';
 
 // Live adoption numbers under the install command. The promise streams in after the first paint; a number that could not be fetched is left out rather than guessed.
 export function AdoptionStats({ stats, lang }: { stats: Promise<Stats>; lang: Lang }) {
-	const t = LABEL[lang];
+	const t = LOCALES[lang].adoption;
 	return (
 		<div className='min-h-[18px] font-mono text-xs'>
 			<Await promise={stats} fallback={null}>
@@ -21,7 +17,7 @@ export function AdoptionStats({ stats, lang }: { stats: Promise<Stats>; lang: La
 					const parts = [
 						s.stars !== null && (
 							<a key='stars' href={`${REPO_URL}/stargazers`} className={item}>
-								{t.stars(s.stars)}
+								{t.stars.replace('{n}', s.stars.toLocaleString('en-US'))}
 							</a>
 						),
 						s.version !== null && (
@@ -31,7 +27,7 @@ export function AdoptionStats({ stats, lang }: { stats: Promise<Stats>; lang: La
 						),
 						s.importedBy !== null && (
 							<a key='imported' href={`${PKG}?tab=importedby`} title={t.importedTitle} className={item}>
-								{t.imported(s.importedBy)}
+								{t.imported.replace('{n}', s.importedBy.toLocaleString('en-US'))}
 							</a>
 						),
 					].filter(Boolean);

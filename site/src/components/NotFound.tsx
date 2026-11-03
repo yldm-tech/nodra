@@ -1,16 +1,12 @@
 import { Link } from '@tanstack/react-router';
+import { LOCALES } from '../lib/i18n';
 import { useLang } from '../lib/lang';
 import { Mascot } from './Mascot';
 import { SiteHeader } from './SiteHeader';
 
-const COPY = {
-	zh: { title: '这个版本不存在', body: '找不到这个页面，可能链接已经过期。', home: '回到首页' },
-	en: { title: 'No such version', body: 'This page does not exist; the link may be out of date.', home: 'Back home' },
-};
-
 export function NotFound() {
 	const lang = useLang();
-	const t = COPY[lang];
+	const t = LOCALES[lang].notFound;
 	return (
 		<div className='min-h-screen bg-ink'>
 			<title>{`${t.title} · Nodra`}</title>

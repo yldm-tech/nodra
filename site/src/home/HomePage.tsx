@@ -38,7 +38,7 @@ function measureZoom(): Zoom {
 
 export function HomePage() {
 	const lang = useLang();
-	const li = lang === 'en' ? 1 : 0;
+	const li = lang === 'zh' ? 0 : 1;
 	const t = T[lang];
 	const { stats } = homeRoute.useLoaderData();
 

@@ -1,10 +1,6 @@
 import { Link } from '@tanstack/react-router';
-import { REPO_URL, useLang, useSetLang } from '../lib/lang';
-
-const NAV = {
-	zh: { home: '首页', docs: '文档', examples: '示例' },
-	en: { home: 'Home', docs: 'Docs', examples: 'Examples' },
-};
+import { LOCALES } from '../lib/i18n';
+import { LANGS, REPO_URL, useLang, useSetLang } from '../lib/lang';
 
 const ear = 'absolute top-2 size-2.5 rounded-full bg-dra-cream';
 const earInner = 'absolute top-[3px] left-[3px] size-1 rounded-full bg-dra-blush';
@@ -52,7 +48,7 @@ const langBtn = 'cursor-pointer border-0 px-3 py-1.5 font-mono text-xs';
 export function SiteHeader({ active }: { active: 'home' | 'docs' }) {
 	const lang = useLang();
 	const setLang = useSetLang();
-	const t = NAV[lang];
+	const t = LOCALES[lang].nav;
 
 	return (
 		<header className='fixed inset-x-0 top-0 z-20 h-[68px] border-b border-fg/8 bg-ink/88 backdrop-blur-md'>
@@ -75,13 +71,12 @@ export function SiteHeader({ active }: { active: 'home' | 'docs' }) {
 						{t.examples}
 					</a>
 				</nav>
-				<div role='group' aria-label='Language' className='flex flex-none overflow-hidden rounded-full border border-fg/18 font-mono text-xs'>
-					<button type='button' lang='zh-CN' aria-pressed={lang === 'zh'} onClick={() => setLang('zh')} className={`${langBtn} ${lang === 'zh' ? 'bg-fg text-ink' : 'bg-transparent text-fg-4'}`}>
-						中
-					</button>
-					<button type='button' lang='en' aria-pressed={lang === 'en'} onClick={() => setLang('en')} className={`${langBtn} ${lang === 'en' ? 'bg-fg text-ink' : 'bg-transparent text-fg-4'}`}>
-						EN
-					</button>
+				<div role='group' aria-label={t.language} className='flex max-w-[290px] flex-none overflow-x-auto rounded-full border border-fg/18 font-mono text-xs'>
+					{LANGS.map((code) => (
+						<button key={code} type='button' lang={LOCALES[code].html} aria-label={LOCALES[code].name} aria-pressed={lang === code} onClick={() => setLang(code)} className={`${langBtn} ${lang === code ? 'bg-fg text-ink' : 'bg-transparent text-fg-4'}`}>
+							{LOCALES[code].short}
+						</button>
+					))}
 				</div>
 				<a href={REPO_URL} aria-label='GitHub' title='GitHub' className='flex size-[38px] flex-none items-center justify-center rounded-full border border-fg/18 text-fg hover:border-lime hover:bg-lime hover:text-ink'>
 					<GitHubIcon />

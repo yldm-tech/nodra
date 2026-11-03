@@ -1,4 +1,5 @@
 import type { Lang } from '../lib/lang';
+import { localeFor } from '../lib/i18n';
 
 export type Mood = 'idle' | 'focus' | 'happy' | 'sad';
 
@@ -91,7 +92,7 @@ export function Mascot({ mood = 'idle', ver = '0042', lang = 'zh' }: { mood?: Mo
 
 			{(happy || sad) && (
 				<div key={`bubble-${mood}`} className={`absolute top-1.5 left-28 animate-dra-pop rounded-full px-[9px] py-1 text-[11px] font-bold whitespace-nowrap text-ink ${happy ? 'bg-lime' : 'bg-coral-soft'}`}>
-					{happy ? '+1 ✓' : lang === 'en' ? 'oops…' : '哎呀…'}
+					{happy ? '+1 ✓' : localeFor(lang).html === 'zh-CN' ? '哎呀…' : 'oops…'}
 				</div>
 			)}
 		</div>
