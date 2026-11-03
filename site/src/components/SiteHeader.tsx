@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { LOCALES } from '../lib/i18n';
-import { LANGS, REPO_URL, useLang, useSetLang } from '../lib/lang';
+import { LANGS, REPO_URL, type Lang, useLang, useSetLang } from '../lib/lang';
 
 const ear = 'absolute top-2 size-2.5 rounded-full bg-dra-cream';
 const earInner = 'absolute top-[3px] left-[3px] size-1 rounded-full bg-dra-blush';
@@ -43,8 +43,6 @@ export function GitHubIcon() {
 const navLink = 'border-b-[1.5px] py-1.5 hover:text-fg';
 const navIdle = `${navLink} border-transparent text-fg-4`;
 const navActive = `${navLink} border-lime text-fg`;
-const langBtn = 'cursor-pointer border-0 px-3 py-1.5 font-mono text-xs';
-
 export function SiteHeader({ active }: { active: 'home' | 'docs' }) {
 	const lang = useLang();
 	const setLang = useSetLang();
@@ -71,13 +69,17 @@ export function SiteHeader({ active }: { active: 'home' | 'docs' }) {
 						{t.examples}
 					</a>
 				</nav>
-				<div role='group' aria-label={t.language} className='flex max-w-[290px] flex-none overflow-x-auto rounded-full border border-fg/18 font-mono text-xs'>
-					{LANGS.map((code) => (
-						<button key={code} type='button' lang={LOCALES[code].html} aria-label={LOCALES[code].name} aria-pressed={lang === code} onClick={() => setLang(code)} className={`${langBtn} ${lang === code ? 'bg-fg text-ink' : 'bg-transparent text-fg-4'}`}>
-							{LOCALES[code].short}
-						</button>
-					))}
-				</div>
+				<label className='relative flex flex-none items-center rounded-full border border-fg/18 bg-ink/80 font-mono text-xs text-fg-3'>
+					<span className='sr-only'>{t.language}</span>
+					<select value={lang} onChange={(event) => setLang(event.currentTarget.value as Lang)} aria-label={t.language} className='max-w-[130px] cursor-pointer appearance-none bg-transparent py-1.5 pr-8 pl-3 outline-none'>
+						{LANGS.map((code) => (
+							<option key={code} value={code} lang={LOCALES[code].html}>
+								{LOCALES[code].name}
+							</option>
+						))}
+					</select>
+					<span aria-hidden='true' className='pointer-events-none absolute right-3 text-fg-5'>⌄</span>
+				</label>
 				<a href={REPO_URL} aria-label='GitHub' title='GitHub' className='flex size-[38px] flex-none items-center justify-center rounded-full border border-fg/18 text-fg hover:border-lime hover:bg-lime hover:text-ink'>
 					<GitHubIcon />
 				</a>
