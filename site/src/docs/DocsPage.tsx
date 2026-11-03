@@ -4,7 +4,7 @@ import { Mascot } from '../components/Mascot';
 import { SiteHeader } from '../components/SiteHeader';
 import { highlightGo } from '../lib/highlight';
 import { INSTALL_CMD, REPO_URL, useLang } from '../lib/lang';
-import { GROUPS, SECTIONS, UI } from './content';
+import { SECTIONS, UI } from './content';
 
 const anchorOf = (sectionId: string, method: string) => `${sectionId}-${method.replace(/[^A-Za-z0-9]+/g, '-')}`;
 const highlighted = Object.fromEntries(SECTIONS.filter((s) => s.code).map((s) => [s.id, highlightGo(s.code!)]));
@@ -12,7 +12,7 @@ const eyebrow = 'font-mono text-[11px] tracking-[0.14em]';
 
 export function DocsPage() {
 	const lang = useLang();
-	const li = lang === 'en' ? 1 : 0;
+	const li = lang === 'zh' ? 0 : 1;
 	const t = UI[lang];
 
 	const [query, setQuery] = useState('');
@@ -55,7 +55,7 @@ export function DocsPage() {
 			if (!titleHit && hits.length === 0) continue;
 			let g = groups.find((x) => x.key === s.group);
 			if (!g) {
-				g = { key: s.group, label: GROUPS[s.group][li], items: [] };
+					g = { key: s.group, label: t.groups[s.group], items: [] };
 				groups.push(g);
 			}
 			g.items.push({ id: s.id, title, hits });
@@ -140,7 +140,7 @@ export function DocsPage() {
 					{SECTIONS.map((s) => (
 						<section key={s.id} id={s.id} data-doc-sec={s.id} className='flex flex-col gap-6 border-b border-fg/8 pt-16 pb-10'>
 							<div className='flex flex-col gap-3'>
-								<span className={`${eyebrow} text-lime uppercase`}>{GROUPS[s.group][li]}</span>
+								<span className={`${eyebrow} text-lime uppercase`}>{t.groups[s.group]}</span>
 								<h2 className='m-0 text-[clamp(28px,3vw,38px)] leading-[1.1] font-bold tracking-[-0.035em]'>{s.title[li]}</h2>
 								<p className='m-0 text-base leading-[1.8] text-fg-3'>{s.lead[li]}</p>
 							</div>

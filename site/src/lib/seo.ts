@@ -6,14 +6,14 @@ export const SITE_URL = 'https://nodra.yldm.ai';
 export const SITE_NAME = 'Nodra';
 
 const OG_SIZE = { width: 1200, height: 630 };
-const LOCALE: Record<Lang, string> = { zh: 'zh_CN', en: 'en_US' };
+const LOCALE: Record<Lang, string> = { zh: 'zh_CN', en: 'en_US', ja: 'ja_JP', ko: 'ko_KR', es: 'es_ES', fr: 'fr_FR' };
 
 // TanStack renders { 'script:ld+json': data } entries as an escaped <script type="application/ld+json"> (router-core types it), but react-router narrows head meta to <meta> props, hence the cast.
 const ldJson = (data: Record<string, unknown>) => ({ 'script:ld+json': { '@context': 'https://schema.org', ...data } }) as unknown as JSX.IntrinsicElements['meta'];
 
-// Chinese lives at the bare path and English at ?lang=en; any other query string (utm tags and the like) is dropped from canonical URLs.
+// Chinese lives at the bare path; other locales use ?lang=…; any other query string (utm tags and the like) is dropped from canonical URLs.
 export function pageUrl(path: string, lang: Lang): string {
-	return `${SITE_URL}${path}${lang === 'en' ? '?lang=en' : ''}`;
+	return `${SITE_URL}${path}${lang === 'zh' ? '' : `?lang=${lang}`}`;
 }
 
 interface PageSeo {
@@ -32,10 +32,11 @@ interface PageSeo {
 
 export function seoHead(p: PageSeo) {
 	const url = pageUrl(p.path, p.lang);
-	const image = `${SITE_URL}/og/${p.image}-${p.lang}.png`;
+	const imageLang = p.lang === 'zh' || p.lang === 'en' ? p.lang : 'en';
+	const image = `${SITE_URL}/og/${p.image}-${imageLang}.png`;
 	const ogTitle = p.ogTitle ?? p.title;
 	const ogDescription = p.ogDescription ?? p.description;
-	const other: Lang = p.lang === 'en' ? 'zh' : 'en';
+	const other: Lang = p.lang === 'zh' ? 'en' : 'zh';
 	return {
 		meta: [
 			{ title: p.title },
@@ -62,8 +63,7 @@ export function seoHead(p: PageSeo) {
 		],
 		links: [
 			{ rel: 'canonical', href: url },
-			{ rel: 'alternate', hrefLang: 'zh-CN', href: pageUrl(p.path, 'zh') },
-			{ rel: 'alternate', hrefLang: 'en', href: pageUrl(p.path, 'en') },
+			...Object.keys(LOCALE).map((code) => ({ rel: 'alternate', hrefLang: code === 'zh' ? 'zh-CN' : code, href: pageUrl(p.path, code as Lang) })),
 			{ rel: 'alternate', hrefLang: 'x-default', href: pageUrl(p.path, 'zh') },
 		],
 	};

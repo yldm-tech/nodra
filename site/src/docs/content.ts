@@ -1,3 +1,6 @@
+import type { Lang } from '../lib/lang';
+import { LOCALES } from '../lib/i18n';
+
 // API reference for the root package. Signatures, contract notes and examples were checked against the v1.1.0 sources (api.go, internal/core, devtools, docs/architecture.md); every example compiles against the module.
 
 type Pair = [zh: string, en: string];
@@ -15,50 +18,7 @@ export interface DocSection {
 	concurrency?: Pair;
 }
 
-export const UI = {
-	zh: {
-		kicker: 'API 参考 · github.com/yldm-tech/nodra',
-		seeK: '还没看懂？',
-		seeT: '看动画演示：失败回滚、批量合并与异步竞争',
-		ftChange: '更新日志',
-		ftContrib: '参与贡献',
-		ftSec: '安全策略',
-		search: '搜索方法或章节…',
-		noResults: '没找到匹配的方法或章节',
-		toc: '目录',
-		title: 'Nodra 文档',
-		intro: '根包 github.com/yldm-tech/nodra 的完整方法索引与语义约定。每个章节都包含方法签名、行为约定、并发说明和可直接运行的示例。',
-		contract: '行为约定',
-		concurrency: '并发说明',
-		copy: '复制',
-		copied: '已复制',
-		footnote: '签名、示例代码与行为说明均已对照 v1.1.0 源码核对，示例可直接编译；以 pkg.go.dev 上的文档为准。',
-		metaTitle: 'Nodra 文档 · API 参考',
-		metaDesc: 'Nodra 根包的完整方法索引与语义约定：Store、选择器、原子事务、撤销重做、持久化、异步动作与 MyGo 集成。',
-		ogImageAlt: 'Nodra 文档：根包 API 参考，含方法签名、行为约定与并发说明。',
-	},
-	en: {
-		kicker: 'API REFERENCE · github.com/yldm-tech/nodra',
-		seeK: 'PREFER VISUALS?',
-		seeT: 'Watch rollback, batching and async races, step by step',
-		ftChange: 'Changelog',
-		ftContrib: 'Contributing',
-		ftSec: 'Security',
-		search: 'Search methods or sections…',
-		noResults: 'Nothing matches that search',
-		toc: 'Contents',
-		title: 'Nodra documentation',
-		intro: 'The method index and semantic contract for the root package github.com/yldm-tech/nodra. Each group lists signatures, contract points, concurrency notes and a runnable example.',
-		contract: 'CONTRACT',
-		concurrency: 'CONCURRENCY',
-		copy: 'Copy',
-		copied: 'Copied',
-		footnote: 'Signatures, examples and contract notes are checked against the v1.1.0 sources, and every example compiles; pkg.go.dev is authoritative.',
-		metaTitle: 'Nodra docs · API reference',
-		metaDesc: 'The method index and semantic contract of the Nodra root package: Store, selectors, atomic transactions, undo/redo, persistence, async actions and MyGo integration.',
-		ogImageAlt: 'Nodra docs: the root package API reference with signatures, contracts and concurrency notes.',
-	},
-};
+export const UI = Object.fromEntries(Object.entries(LOCALES).map(([lang, locale]) => [lang, locale.docs])) as Record<Lang, (typeof LOCALES)['zh']['docs']>;
 
 export const GROUPS = {
 	start: ['开始', 'Getting started'],
