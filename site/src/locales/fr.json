@@ -118,5 +118,13 @@
   "registration": {
     "title": "Enregistrer un projet utilisant Nodra",
     "body": "Nom du projet :\nURL du projet :\nComment utilisez-vous Nodra ?\nPouvons-nous présenter ce projet sur le site Nodra ? (oui/non)\n\nNe partagez aucune information privée ou sensible."
+  },
+  "projects": {
+    "kicker": "PROJETS",
+    "title": "Projets utilisant Nodra",
+    "lead": "Ces projets montrent Nodra en action. Enregistrez le vôtre et nous pourrons l’ajouter après vérification.",
+    "official": "Exemple officiel",
+    "view": "Voir le projet →",
+    "register": "Enregistrer votre projet →"
   }
 }

@@ -118,5 +118,13 @@
   "registration": {
     "title": "Nodra를 사용하는 프로젝트 등록",
     "body": "프로젝트 이름:\n프로젝트 URL:\nNodra 사용 방법:\nNodra 웹사이트에 프로젝트를 소개해도 될까요? (예/아니요)\n\n비공개 또는 민감한 정보를 입력하지 마세요."
+  },
+  "projects": {
+    "kicker": "프로젝트",
+    "title": "Nodra를 사용하는 프로젝트",
+    "lead": "Nodra의 실제 사용 예를 소개합니다. 프로젝트를 등록하면 검토 후 여기에 추가합니다.",
+    "official": "공식 예제",
+    "view": "프로젝트 보기 →",
+    "register": "프로젝트 등록 →"
   }
 }

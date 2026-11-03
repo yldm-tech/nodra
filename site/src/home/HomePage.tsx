@@ -9,6 +9,7 @@ import { type FlowModel, flowView, startHeroFlow } from './flow';
 import { Hero, ctaPrimary } from './Hero';
 import { type HowCursor, STEP_MS, nextCursor } from './how';
 import { HowItWorks } from './HowItWorks';
+import { Projects } from './Projects';
 import { sectionsView } from './sections';
 import { Command, padX } from './ui';
 
@@ -178,6 +179,8 @@ export function HomePage() {
 				/>
 
 				<Features t={t} views={sectionsView(sec.step, sec.ph, li)} zoom={zoom.sec} />
+
+				<Projects lang={lang} />
 
 				<section data-shape='6' className={`mx-auto flex max-w-[1312px] flex-col items-center justify-end gap-7 pb-[110px] text-center ${padX}`}>
 					<div className='flex flex-1 flex-col items-center justify-center gap-7 pt-[110px]'>

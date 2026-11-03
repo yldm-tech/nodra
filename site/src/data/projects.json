@@ -1,0 +1,54 @@
+[
+  {
+    "id": "workbench",
+    "name": "Nodra Workbench",
+    "url": "https://github.com/yldm-tech/nodra/tree/main/examples/workbench",
+    "description": {
+      "zh": "交互式并发与状态管理示例。",
+      "en": "Interactive concurrency and state-management example.",
+      "ja": "並行処理と状態管理を体験できるサンプル。",
+      "ko": "동시성과 상태 관리를 보여주는 대화형 예제입니다.",
+      "es": "Ejemplo interactivo de concurrencia y gestión de estado.",
+      "fr": "Exemple interactif de concurrence et de gestion d’état."
+    }
+  },
+  {
+    "id": "mygo",
+    "name": "MyGo integration",
+    "url": "https://github.com/yldm-tech/nodra/blob/main/examples/mygo/main.go",
+    "description": {
+      "zh": "由 Nodra Store 驱动的原生 MyGo 窗口。",
+      "en": "A native MyGo window driven by a Nodra Store.",
+      "ja": "Nodra Store で動くネイティブ MyGo ウィンドウ。",
+      "ko": "Nodra Store로 구동되는 네이티브 MyGo 창입니다.",
+      "es": "Una ventana nativa de MyGo impulsada por un Store de Nodra.",
+      "fr": "Une fenêtre MyGo native pilotée par un Store Nodra."
+    }
+  },
+  {
+    "id": "persistent",
+    "name": "Persistent Store",
+    "url": "https://github.com/yldm-tech/nodra/blob/main/examples/persistent/main.go",
+    "description": {
+      "zh": "结合编解码器、存储与恢复保存 Store 状态。",
+      "en": "Store state with codecs, storage and recovery.",
+      "ja": "Codec、ストレージ、復旧を使った状態保存。",
+      "ko": "코덱, 저장소와 복구를 사용하는 상태 저장 예제입니다.",
+      "es": "Estado persistente con codecs, almacenamiento y recuperación.",
+      "fr": "État persistant avec codecs, stockage et récupération."
+    }
+  },
+  {
+    "id": "devtools",
+    "name": "DevTools inspector",
+    "url": "https://github.com/yldm-tech/nodra/blob/main/examples/devtools/main.go",
+    "description": {
+      "zh": "可选的本地只读检查器。",
+      "en": "The optional read-only local inspector.",
+      "ja": "オプションの読み取り専用ローカルインスペクター。",
+      "ko": "선택 가능한 읽기 전용 로컬 검사기입니다.",
+      "es": "El inspector local opcional de solo lectura.",
+      "fr": "L’inspecteur local facultatif en lecture seule."
+    }
+  }
+]
