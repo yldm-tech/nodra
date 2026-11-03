@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 
-// Public adoption numbers shown on the home page. Go modules have no public download counts, so these are the real signals that exist: GitHub stars, the version `go get` resolves, and the pkg.go.dev importer count. A source that fails is reported as null and simply not shown.
+// Public adoption numbers shown on the home page. Go modules have no public download counts, so these are the real signals that exist: GitHub stars, the version `go get` resolves, and pkg.go.dev's known-importer count. A source that fails is reported as null and simply not shown.
 export interface AdoptionStats {
 	stars: number | null;
 	version: string | null;
@@ -30,10 +30,12 @@ async function latestVersion(): Promise<string> {
 }
 
 async function importedBy(): Promise<number> {
-	const html = await (await fetchOk(`https://pkg.go.dev/${MODULE}`)).text();
-	const m = html.match(/aria-label="Imported By: ([\d,]+)"/);
-	if (!m) throw new Error('pkg.go.dev: importer count not found');
-	return Number(m[1].replace(/,/g, ''));
+	const data = (await (await fetchOk(`https://pkg.go.dev/v1/imported-by/${MODULE}`)).json()) as {
+		importedBy?: { total?: number };
+	};
+	const total = data.importedBy?.total;
+	if (typeof total !== 'number' || !Number.isInteger(total) || total < 0) throw new Error('pkg.go.dev: importer count unavailable');
+	return total;
 }
 
 const valueOrNull = <T,>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);

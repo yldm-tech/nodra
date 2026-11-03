@@ -6,8 +6,8 @@ import type { AdoptionStats as Stats } from '../lib/stats';
 const PKG = 'https://pkg.go.dev/github.com/yldm-tech/nodra';
 
 const LABEL = {
-	zh: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `被 ${n.toLocaleString('en-US')} 个包导入`, aria: '项目数据' },
-	en: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `imported by ${n.toLocaleString('en-US')}`, aria: 'Project stats' },
+	zh: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `pkg.go.dev 已知导入 ${n.toLocaleString('en-US')} 个包`, importedTitle: '仅统计 pkg.go.dev 已索引的公开导入方', aria: '项目数据' },
+	en: { stars: (n: number) => `★ ${n} stars`, imported: (n: number) => `known pkg.go.dev importers: ${n.toLocaleString('en-US')}`, importedTitle: 'Counts public importers indexed by pkg.go.dev', aria: 'Project stats' },
 };
 
 const item = 'text-fg-5 hover:text-fg';
@@ -31,7 +31,7 @@ export function AdoptionStats({ stats, lang }: { stats: Promise<Stats>; lang: La
 							</a>
 						),
 						s.importedBy !== null && (
-							<a key='imported' href={`${PKG}?tab=importedby`} className={item}>
+							<a key='imported' href={`${PKG}?tab=importedby`} title={t.importedTitle} className={item}>
 								{t.imported(s.importedBy)}
 							</a>
 						),
