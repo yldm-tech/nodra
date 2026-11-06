@@ -21,6 +21,7 @@
 ### Features
 
 * **bridge:** let web pages follow a Store and dispatch actions ([#94](https://github.com/yldm-tech/nodra/issues/94)) ([1f106b7](https://github.com/yldm-tech/nodra/commit/1f106b7055f8357250278a7088e2742616618f7a))
+* **nativeui:** make a window's Undo and Redo act on a History ([#95](https://github.com/yldm-tech/nodra/issues/95)) ([134d213](https://github.com/yldm-tech/nodra/commit/134d2133c3f09e854bd98e7c976a8de49a527e5b))
 
 ## [1.1.0](https://github.com/yldm-tech/nodra/compare/v1.0.0...v1.1.0) (2026-10-25)
 
