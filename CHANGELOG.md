@@ -4,7 +4,7 @@
 
 ### Dependencies
 
-* support MyGo 0.7.2; go.mod now requires it instead of 0.6.3, and the invalidation helpers keep the same signatures and behaviour
+* support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour
 
 ### Documentation
 
