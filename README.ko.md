@@ -38,6 +38,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - 디바운스, 취소, 큐, 진행률, 재시도, 메트릭을 지원하는 비동기 Action.
 - `Scope`를 통한 소유권과 종료 순서 관리.
 - MyGo 무효화 헬퍼와 인증된 로컬 DevTools.
+- MyGo 앱의 웹 페이지가 Store를 구독하고 등록된 Action으로 변경할 수 있는 브리지.
 
 ## MyGo
 
@@ -47,6 +48,26 @@ defer stop()
 ```
 
 MyGo 대상 버전은 `v0.7.4`입니다. 임시 위젯 상태는 뷰 소유자에 두고 공유 Store에는 수정된 필드만 반영하세요. 최소 예제는 [`examples/mygo`](examples/mygo/main.go)에서 확인할 수 있습니다.
+
+## 웹 페이지
+
+```go
+b := bridge.New(bridge.Options{})
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState { return PageState{Count: s.Count} })
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+b.Bind() // before App.Run
+```
+
+```js
+import { dispatch, remoteState } from "./nodra.js";
+
+const counter = remoteState("counter"); // subscribe and getSnapshot fit useSyncExternalStore
+await dispatch("counter/add", 1);
+```
+
+선택적 `bridge` 하위 패키지는 하나의 Store를 네이티브 창과 웹 페이지 모두의 단일 상태 원천으로 만듭니다. 페이지는 프로젝션이 반환하는 값만 보고, 값이 바뀔 때만 새 프레임을 받으며(느린 페이지는 최신 프레임만 받습니다), Go가 등록한 Action으로만 상태를 바꿀 수 있습니다. [`bridge/client`](bridge/client/nodra.js)의 JavaScript 클라이언트는 의존성이 없습니다. 자세한 내용은 [`docs/bridge.md`](docs/bridge.md)와 [`examples/web`](examples/web/main.go)를 참고하세요.
 
 ## 완전한 예제
 

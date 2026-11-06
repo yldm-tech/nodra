@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Web page</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { display: grid; place-items: center; height: 100vh; margin: 0; text-align: center; }
+      output { display: block; font-size: 32px; margin: 12px 0; }
+      .error { color: #c62828; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <strong>Web page</strong>
+      <output id="count">…</output>
+      <button id="reset">Reset</button>
+      <button id="add">+1</button>
+      <p id="error" class="error" hidden></p>
+    </main>
+    <script type="module">
+      import { dispatch, remoteState } from "/nodra/nodra.js";
+
+      const counter = remoteState("counter");
+      const output = document.getElementById("count");
+      const error = document.getElementById("error");
+      const fail = (reason) => {
+        error.textContent = String(reason?.message ?? reason);
+        error.hidden = false;
+      };
+      counter.subscribe(() => {
+        if (counter.getError()) fail(counter.getError());
+        if (counter.hasValue()) output.textContent = `Count: ${counter.getSnapshot().count}`;
+      });
+      document.getElementById("add").onclick = () => dispatch("counter/add", { by: 1 }).catch(fail);
+      document.getElementById("reset").onclick = () => dispatch("counter/reset").catch(fail);
+    </script>
+  </body>
+</html>

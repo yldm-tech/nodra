@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yldm-tech/nodra"
+	"github.com/yldm-tech/nodra/bridge"
 	"github.com/yldm-tech/nodra/devtools"
 )
 
@@ -316,6 +318,48 @@ func TestPublicAPI(t *testing.T) {
 	case <-store.Done():
 	default:
 		t.Fatal("Close did not signal Done")
+	}
+}
+
+// The bridge serves a projection of a store to pages and runs the actions they dispatch, from outside the module.
+func TestBridgeFromAnotherModule(t *testing.T) {
+	store := nodra.New(appState{Count: 1, Name: "kept in Go"})
+	defer func() { _ = store.Close() }()
+	b := bridge.New(bridge.Options{})
+	defer b.Close()
+	type page struct {
+		Count int `json:"count"`
+	}
+	if _, err := bridge.ExposeProjection(b, "counter", store, func(s appState) page { return page{Count: s.Count} }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bridge.Handle(b, "add", func(_ context.Context, by int) error {
+		return store.Update(func(s *appState) { s.Count += by })
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	frames := make(chan bridge.Frame, 8)
+	done := make(chan error, 1)
+	go func() {
+		done <- b.Watch(ctx, "counter", 0, func(f bridge.Frame) error { frames <- f; return nil })
+	}()
+	if f := <-frames; string(f.Value) != `{"count":1}` {
+		t.Fatalf("first frame %s", f.Value)
+	}
+	if err := b.Dispatch(ctx, "add", json.RawMessage(`2`)); err != nil {
+		t.Fatal(err)
+	}
+	if f := <-frames; string(f.Value) != `{"count":3}` || f.Version != 1 {
+		t.Fatalf("frame after the action %+v", f)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Stat(bridge.Client, "nodra.js"); err != nil {
+		t.Fatalf("the client is not served: %v", err)
 	}
 }
 

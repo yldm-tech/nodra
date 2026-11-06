@@ -38,6 +38,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - Acciones asíncronas con debounce, cancelación, cola, progreso, reintentos y métricas.
 - Gestión de propiedad y orden de cierre mediante `Scope`.
 - Integración de invalidación con MyGo e inspector DevTools local autenticado.
+- Un puente para que las páginas web de una app MyGo sigan un Store y lo cambien mediante acciones registradas.
 
 ## MyGo
 
@@ -47,6 +48,26 @@ defer stop()
 ```
 
 La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para un ejemplo mínimo.
+
+## Páginas web
+
+```go
+b := bridge.New(bridge.Options{})
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState { return PageState{Count: s.Count} })
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+b.Bind() // before App.Run
+```
+
+```js
+import { dispatch, remoteState } from "./nodra.js";
+
+const counter = remoteState("counter"); // subscribe and getSnapshot fit useSyncExternalStore
+await dispatch("counter/add", 1);
+```
+
+El subpaquete opcional `bridge` convierte un Store en la única fuente de verdad para ventanas nativas y páginas web. Las páginas solo ven lo que devuelve la proyección, reciben un frame cuando cambia (el más reciente si son lentas) y solo cambian el estado mediante las acciones que Go registra. El cliente JavaScript de [`bridge/client`](bridge/client/nodra.js) no tiene dependencias. Consulta [`docs/bridge.md`](docs/bridge.md) y [`examples/web`](examples/web/main.go).
 
 ## Ejemplo completo
 

@@ -38,6 +38,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - 支持防抖、取消、排队、进度、重试和指标的异步 Action。
 - 用 `Scope` 管理资源所有权和关闭顺序。
 - MyGo 刷新绑定和本地认证 DevTools 检查器。
+- 网页桥接：MyGo 应用的网页可以跟随 Store，并通过注册的 Action 修改它。
 
 ## MyGo
 
@@ -47,6 +48,26 @@ defer stop()
 ```
 
 MyGo 集成目标版本是 `v0.7.4`。临时控件状态应放在视图所有者中，共享业务状态只提交实际编辑的字段。参见 [`examples/mygo`](examples/mygo/main.go)。
+
+## 网页
+
+```go
+b := bridge.New(bridge.Options{})
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState { return PageState{Count: s.Count} })
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+b.Bind() // before App.Run
+```
+
+```js
+import { dispatch, remoteState } from "./nodra.js";
+
+const counter = remoteState("counter"); // subscribe and getSnapshot fit useSyncExternalStore
+await dispatch("counter/add", 1);
+```
+
+可选的 `bridge` 子包让一个 Store 同时作为原生窗口和网页的唯一状态源。网页只看到投影返回的值，值变化时才收到新帧（网页处理慢时只收最新一帧），也只能通过 Go 注册的 Action 修改状态。[`bridge/client`](bridge/client/nodra.js) 里的 JavaScript 客户端没有任何依赖。详见 [`docs/bridge.md`](docs/bridge.md) 和 [`examples/web`](examples/web/main.go)。
 
 ## 完整示例
 

@@ -8,11 +8,12 @@ Start with [workbench](workbench/README.md) for a complete desktop application, 
 | [mygo](mygo/README.md) | Two native windows, selective redraws and field bindings | `go run ./examples/mygo` |
 | [persistent](persistent/README.md) | Cloned state, JSON migration, backup recovery and asynchronous persistence | `go run ./examples/persistent -file /path/to/state.json` |
 | [devtools](devtools/README.md) | Local inspector, named actions and optional snapshot restoration | `go run ./examples/devtools` |
+| [web](web/README.md) | A native window and a web page sharing one Store through the bridge | `go run ./examples/web` |
 | [workbench](workbench/README.md) | Search, settings, localization, cancelable tasks and scoped shutdown | `go run ./examples/workbench` |
 
 ## Requirements
 
-Use Go 1.27.3 or later. All examples belong to the root Go module and use its pinned dependencies, including MyGo v0.7.4; they do not require separate module initialization. The `mygo` and `workbench` examples open native windows and need a graphical desktop session. See the [supported platforms](../docs/support.md) for the tested runtime matrix.
+Use Go 1.27.3 or later. All examples belong to the root Go module and use its pinned dependencies, including MyGo v0.7.4; they do not require separate module initialization. The `mygo`, `web` and `workbench` examples open native windows and need a graphical desktop session. See the [supported platforms](../docs/support.md) for the tested runtime matrix.
 
 Clone the repository and enter its root before running any command:
 
