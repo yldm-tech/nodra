@@ -1,0 +1,40 @@
+/** A state as Go sends it: its name, the version of the source it was taken at, and the value Go's projection returned. */
+export interface Frame<T> {
+  name: string;
+  version: number;
+  value: T;
+}
+
+/** What the client needs of the MyGo runtime, which MyGo injects as window.mygo. Tests pass their own. */
+export interface Runtime {
+  call<R = unknown>(method: string, ...args: unknown[]): Promise<R>;
+  channel<V = unknown>(onmessage?: (value: V) => void): { close(): void };
+}
+
+export interface Options {
+  /** The name the bridge was bound under in Go, "Nodra" unless BindAs gave another. */
+  service?: string;
+  /** The MyGo runtime; window.mygo by default. */
+  runtime?: Runtime;
+}
+
+/** A state Go exposes, followed while it has listeners. */
+export interface RemoteState<T> {
+  readonly name: string;
+  /** The latest value, or undefined before the first frame. The same object until a new frame arrives. */
+  getSnapshot(): T | undefined;
+  /** The version of the latest value, 0 before the first frame. */
+  getVersion(): number;
+  /** Why the watch ended, such as a state that is not exposed or no longer is; undefined while it runs. */
+  getError(): unknown;
+  /** Whether a frame arrived. */
+  hasValue(): boolean;
+  /** Calls listener after every frame and when the watch fails. The first subscriber starts the watch; the last one to unsubscribe stops it. */
+  subscribe(listener: () => void): () => void;
+  /** Resolves with the value once one arrived, and rejects when the watch fails first. */
+  ready(): Promise<T>;
+}
+
+export function remoteState<T>(name: string, options?: Options): RemoteState<T>;
+export function getState<T>(name: string, options?: Options): Promise<Frame<T>>;
+export function dispatch<A = unknown>(name: string, arg?: A, options?: Options): Promise<void>;

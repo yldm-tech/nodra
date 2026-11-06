@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Features
+
+* **bridge:** let the web pages of a MyGo app follow a Store and change it through registered actions: `bridge.Expose` and `bridge.ExposeProjection` serve a source, or the part of it pages may see, through a bound service whose watch sends a frame only when the encoded value changes and coalesces to the latest while a page is slow; `bridge.Handle` registers the actions pages dispatch; `Options.AllowRead` and `Options.AllowDispatch` decide per page. A dependency-free JavaScript client (`bridge/client`, also served from Go as `bridge.Client`) fits React's `useSyncExternalStore`. See docs/bridge.md and examples/web
+
 ### Dependencies
 
 * support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour

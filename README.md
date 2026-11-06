@@ -17,7 +17,7 @@ Nodra is a concurrency-safe reactive state store for Go desktop applications. It
 go get github.com/yldm-tech/nodra@latest
 ```
 
-The core package is `github.com/yldm-tech/nodra`. The optional inspector is `github.com/yldm-tech/nodra/devtools`.
+The core package is `github.com/yldm-tech/nodra`. The optional inspector is `github.com/yldm-tech/nodra/devtools`, and the optional bridge to web pages is `github.com/yldm-tech/nodra/bridge`.
 
 ## Quick start
 
@@ -54,6 +54,7 @@ func main() {
 - Debounced, cancelable and queued async actions with progress, retries and metrics.
 - `Scope` for ownership and shutdown ordering.
 - Optional MyGo invalidation helpers and a local authenticated DevTools inspector.
+- A bridge that lets the web pages of a MyGo app follow a Store and change it through registered actions.
 
 ## MyGo
 
@@ -65,6 +66,26 @@ defer stop()
 ```
 
 The integration targets MyGo `v0.7.4`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
+
+## Web pages
+
+```go
+b := bridge.New(bridge.Options{})
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState { return PageState{Count: s.Count} })
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+b.Bind() // before App.Run
+```
+
+```js
+import { dispatch, remoteState } from "./nodra.js";
+
+const counter = remoteState("counter"); // subscribe and getSnapshot fit useSyncExternalStore
+await dispatch("counter/add", 1);
+```
+
+The optional `bridge` subpackage makes a Store the one source of truth for native windows and web pages alike. Pages see only what the projection returns, receive a frame when it changes (the latest one when they are slow), and change state only through the actions Go registers. The JavaScript client in [`bridge/client`](bridge/client/nodra.js) has no dependencies. See [`docs/bridge.md`](docs/bridge.md) and [`examples/web`](examples/web/main.go).
 
 ## Persistence
 
@@ -94,6 +115,7 @@ The smaller examples cover one integration at a time:
 - [`examples/mygo`](examples/mygo/main.go): native windows and invalidation.
 - [`examples/persistent`](examples/persistent/main.go): migrations, backups and write-behind persistence.
 - [`examples/devtools`](examples/devtools/main.go): local inspector and restoration.
+- [`examples/web`](examples/web/main.go): a native window and a web page sharing one Store through the bridge.
 
 ## DevTools
 
@@ -114,6 +136,7 @@ DevTools is read-only by default. `AllowRestore` explicitly enables typed JSON e
 ## Documentation
 
 - [`docs/public-api.md`](docs/public-api.md): root package API index.
+- [`docs/bridge.md`](docs/bridge.md): web pages that follow a Store and dispatch actions.
 - [`docs/architecture.md`](docs/architecture.md): ownership, concurrency and lifecycle semantics.
 - [`docs/compatibility.md`](docs/compatibility.md): v0.x to v1 compatibility policy.
 - [`docs/support.md`](docs/support.md): supported Go, MyGo, OS, architecture and filesystem matrix.

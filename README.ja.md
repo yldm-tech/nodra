@@ -38,6 +38,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - デバウンス、キャンセル、キュー、進捗、リトライ、メトリクス付き非同期 Action。
 - `Scope` による所有権と終了順序の管理。
 - MyGo の再描画バインディングと認証付きローカル DevTools。
+- MyGo アプリの Web ページが Store を購読し、登録済み Action で変更できるブリッジ。
 
 ## MyGo
 
@@ -47,6 +48,26 @@ defer stop()
 ```
 
 MyGo の対象バージョンは `v0.7.4` です。一時的なウィジェット状態はビュー所有者に置き、共有状態には編集したフィールドだけを書き戻します。最小例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
+
+## Web ページ
+
+```go
+b := bridge.New(bridge.Options{})
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState { return PageState{Count: s.Count} })
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+b.Bind() // before App.Run
+```
+
+```js
+import { dispatch, remoteState } from "./nodra.js";
+
+const counter = remoteState("counter"); // subscribe and getSnapshot fit useSyncExternalStore
+await dispatch("counter/add", 1);
+```
+
+オプションの `bridge` サブパッケージにより、1 つの Store をネイティブウィンドウと Web ページ共通の唯一の状態源にできます。ページは投影が返す値だけを受け取り、値が変わったときにだけ新しいフレームを受け取ります（処理が遅いページには最新のフレームだけが届きます）。状態は Go が登録した Action でのみ変更できます。[`bridge/client`](bridge/client/nodra.js) の JavaScript クライアントは依存関係がありません。詳しくは [`docs/bridge.md`](docs/bridge.md) と [`examples/web`](examples/web/main.go) を参照してください。
 
 ## 完全なサンプル
 
