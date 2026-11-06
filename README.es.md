@@ -39,6 +39,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - Gestión de propiedad y orden de cierre mediante `Scope`.
 - Integración de invalidación con MyGo e inspector DevTools local autenticado.
 - Un puente para que las páginas web de una app MyGo sigan un Store y lo cambien mediante acciones registradas.
+- Deshacer y Rehacer de los atajos y del menú Edit de la ventana sobre un History, para la UI nativa de MyGo.
 
 ## MyGo
 
@@ -48,6 +49,18 @@ defer stop()
 ```
 
 La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para un ejemplo mínimo.
+
+```go
+history := nodra.Track(store, 100)
+nativeui.InvalidateHistory(history, window) // redraw when Undo or Redo becomes possible
+
+func (app *App) view(c *ui.Context) {
+	nativeui.UndoShortcuts(c, app.history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+	// ...
+}
+```
+
+El subpaquete opcional `nativeui` hace que Deshacer y Rehacer de la ventana actúen sobre un `History`: los atajos y, con MyGo 0.7.4 en macOS, los elementos del menú Edit, que solo se habilitan cuando el historial puede actuar. Un campo de texto con el foco conserva su propio deshacer. Está separado del núcleo para que las apps sin UI nativa no enlacen el paquete `ui` de MyGo.
 
 ## Páginas web
 

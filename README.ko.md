@@ -39,6 +39,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - `Scope`를 통한 소유권과 종료 순서 관리.
 - MyGo 무효화 헬퍼와 인증된 로컬 DevTools.
 - MyGo 앱의 웹 페이지가 Store를 구독하고 등록된 Action으로 변경할 수 있는 브리지.
+- 네이티브 UI 창의 실행 취소/다시 실행 단축키와 Edit 메뉴를 History에 연결.
 
 ## MyGo
 
@@ -48,6 +49,18 @@ defer stop()
 ```
 
 MyGo 대상 버전은 `v0.7.4`입니다. 임시 위젯 상태는 뷰 소유자에 두고 공유 Store에는 수정된 필드만 반영하세요. 최소 예제는 [`examples/mygo`](examples/mygo/main.go)에서 확인할 수 있습니다.
+
+```go
+history := nodra.Track(store, 100)
+nativeui.InvalidateHistory(history, window) // redraw when Undo or Redo becomes possible
+
+func (app *App) view(c *ui.Context) {
+	nativeui.UndoShortcuts(c, app.history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+	// ...
+}
+```
+
+선택적 `nativeui` 하위 패키지는 창의 실행 취소와 다시 실행을 `History`에 연결합니다. 단축키와, MyGo 0.7.4부터 macOS에서는 Edit 메뉴 항목도 포함되며, 기록이 실행할 수 있을 때만 활성화됩니다. 포커스된 텍스트 입력은 자체 실행 취소를 유지합니다. 코어와 분리되어 있어 네이티브 UI가 없는 앱은 MyGo의 `ui` 패키지를 링크하지 않습니다.
 
 ## 웹 페이지
 

@@ -39,6 +39,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - `Scope` による所有権と終了順序の管理。
 - MyGo の再描画バインディングと認証付きローカル DevTools。
 - MyGo アプリの Web ページが Store を購読し、登録済み Action で変更できるブリッジ。
+- ネイティブ UI ウィンドウの取り消し/やり直しのショートカットと Edit メニューを History に接続。
 
 ## MyGo
 
@@ -48,6 +49,18 @@ defer stop()
 ```
 
 MyGo の対象バージョンは `v0.7.4` です。一時的なウィジェット状態はビュー所有者に置き、共有状態には編集したフィールドだけを書き戻します。最小例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
+
+```go
+history := nodra.Track(store, 100)
+nativeui.InvalidateHistory(history, window) // redraw when Undo or Redo becomes possible
+
+func (app *App) view(c *ui.Context) {
+	nativeui.UndoShortcuts(c, app.history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+	// ...
+}
+```
+
+オプションの `nativeui` サブパッケージは、ウィンドウの取り消しとやり直しを `History` に結び付けます。ショートカットと、MyGo 0.7.4 以降の macOS では Edit メニューの項目も対象で、履歴が操作できるときだけ有効になります。フォーカス中のテキスト入力は独自の取り消しを保ちます。コアから分かれているため、ネイティブ UI を使わないアプリは MyGo の `ui` パッケージをリンクしません。
 
 ## Web ページ
 

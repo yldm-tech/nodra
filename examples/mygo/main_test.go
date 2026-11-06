@@ -56,3 +56,25 @@ func TestBackgroundButtonUpdatesSharedState(t *testing.T) {
 		t.Fatalf("view did not read the new snapshot: %v", view.Texts())
 	}
 }
+
+func TestUndoAndRedoTheCounter(t *testing.T) {
+	store := nodra.New(appState{})
+	history := nodra.Track(store, 10)
+	defer func() { _ = history.Close(); _ = store.Close() }()
+	app := &counter{store: store, history: history}
+	view := ui.NewTester(app.view, 420, 360)
+	for range 2 {
+		if err := view.Click("+"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view.Key(ui.Cmd, ui.KeyZ)
+	if got := store.Get().Count; got != 1 {
+		t.Fatalf("after Undo the count is %d, want 1", got)
+	}
+	view.Frame()
+	view.Key(ui.Cmd|ui.Shift, ui.KeyZ)
+	if got := store.Get().Count; got != 2 {
+		t.Fatalf("after Redo the count is %d, want 2", got)
+	}
+}
