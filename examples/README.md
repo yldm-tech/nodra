@@ -5,7 +5,7 @@ Start with [workbench](workbench/README.md) for a complete desktop application, 
 | Example | What it demonstrates | Run from the repository root |
 | --- | --- | --- |
 | [basic](basic/README.md) | Store updates, versioned subscriptions and batched notifications | `go run ./examples/basic` |
-| [mygo](mygo/README.md) | Two native windows, selective redraws and field bindings | `go run ./examples/mygo` |
+| [mygo](mygo/README.md) | Two native windows, selective redraws, field bindings, and Undo and Redo of the Edit menu | `go run ./examples/mygo` |
 | [persistent](persistent/README.md) | Cloned state, JSON migration, backup recovery and asynchronous persistence | `go run ./examples/persistent -file /path/to/state.json` |
 | [devtools](devtools/README.md) | Local inspector, named actions and optional snapshot restoration | `go run ./examples/devtools` |
 | [web](web/README.md) | A native window and a web page sharing one Store through the bridge | `go run ./examples/web` |

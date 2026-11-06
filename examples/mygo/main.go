@@ -1,4 +1,4 @@
-// Example mygo demonstrates two native windows sharing business state with independent redraw subscriptions.
+// Example mygo demonstrates two native windows sharing business state with independent redraw subscriptions, and the Edit menu's Undo and Redo acting on the state's history.
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	nodra "github.com/yldm-tech/nodra"
+	"github.com/yldm-tech/nodra/nativeui"
 )
 
 type appState struct {
@@ -16,17 +17,22 @@ type appState struct {
 
 type counter struct {
 	store   *nodra.Store[appState]
+	history *nodra.History[appState]
 	options *mygo.Window
 }
 
 func main() {
 	store := nodra.New(appState{})
 	defer func() { _ = store.Close() }()
-	app := &counter{store: store}
+	history := nodra.Track(store, 100)
+	defer func() { _ = history.Close() }()
+	app := &counter{store: store, history: history}
 	mygo.App.WhenReady(func() {
 		window := mygo.NewWindow(mygo.WindowOptions{Title: "Nodra + MyGo", Width: 420, Height: 360, Content: ui.View(app.view)})
 		// Preferences can change without rebuilding the counter. Button actions read the current preference inside Update.
 		nodra.InvalidateSelector(store, window, func(s appState) int { return s.Count })
+		// Undo and Redo of the Edit menu follow the history as it starts and stops being able to act.
+		nativeui.InvalidateHistory(history, window)
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -34,6 +40,8 @@ func main() {
 }
 
 func (app *counter) view(c *ui.Context) {
+	// Cmd+Z and Shift+Cmd+Z, and the Edit menu, undo and redo the counter's changes.
+	nativeui.UndoShortcuts(c, app.history)
 	count := app.store.Get().Count
 	ui.Column(c).Fill().Center().Padding(20).Gap(16).Children(func() {
 		ui.Text(c, "Nodra + MyGo").FontSize(22).Bold()

@@ -8,6 +8,7 @@ Nodra is a concurrency-safe reactive state store for Go desktop applications. Th
 - `internal/core/`: the implementation of every Store, history, persistence, async and scope type.
 - `devtools/`: the optional inspector; the core never imports it.
 - `bridge/`: the optional bridge to the web pages of a MyGo app, with its dependency-free JavaScript client in `bridge/client` (tested with `node --test bridge/client/nodra.test.mjs`); the core never imports it.
+- `nativeui/`: the optional Edit menu integration for MyGo native UI, which imports MyGo's `ui` package; the core never imports it, so apps without native UI do not link `ui`.
 - `examples/`, `example_test.go`, `public_api_test.go`: runnable examples and the external-package tests that define the v1 contract.
 - `docs/`: `public-api.md`, `architecture.md`, `compatibility.md`, `support.md` and the release evidence. They are release inputs: changing them needs a compatibility review and a changelog entry.
 - `site/`: the website (TanStack Start, TanStack Router, Tailwind CSS v4, React 19 on Cloudflare Workers).

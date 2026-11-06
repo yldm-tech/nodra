@@ -17,7 +17,7 @@ Nodra is a concurrency-safe reactive state store for Go desktop applications. It
 go get github.com/yldm-tech/nodra@latest
 ```
 
-The core package is `github.com/yldm-tech/nodra`. The optional inspector is `github.com/yldm-tech/nodra/devtools`, and the optional bridge to web pages is `github.com/yldm-tech/nodra/bridge`.
+The core package is `github.com/yldm-tech/nodra`. The optional inspector is `github.com/yldm-tech/nodra/devtools`, the optional bridge to web pages is `github.com/yldm-tech/nodra/bridge`, and the Edit menu integration for native UI is `github.com/yldm-tech/nodra/nativeui`.
 
 ## Quick start
 
@@ -55,6 +55,7 @@ func main() {
 - `Scope` for ownership and shutdown ordering.
 - Optional MyGo invalidation helpers and a local authenticated DevTools inspector.
 - A bridge that lets the web pages of a MyGo app follow a Store and change it through registered actions.
+- Undo and Redo of the window's keys and Edit menu acting on a History, for MyGo native UI.
 
 ## MyGo
 
@@ -66,6 +67,18 @@ defer stop()
 ```
 
 The integration targets MyGo `v0.7.4`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
+
+```go
+history := nodra.Track(store, 100)
+nativeui.InvalidateHistory(history, window) // redraw when Undo or Redo becomes possible
+
+func (app *App) view(c *ui.Context) {
+	nativeui.UndoShortcuts(c, app.history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+	// ...
+}
+```
+
+The optional `nativeui` subpackage makes the window's Undo and Redo act on a `History`: the keys, and with MyGo 0.7.4 on macOS the Edit menu items, which are enabled only while history can act. A focused text input keeps its own undo. It is separate from the core so apps without native UI do not link MyGo's `ui` package.
 
 ## Web pages
 
@@ -112,7 +125,7 @@ go run ./examples/workbench -devtools
 The smaller examples cover one integration at a time:
 
 - [`examples/basic`](examples/basic/main.go): Store, subscriptions and batches.
-- [`examples/mygo`](examples/mygo/main.go): native windows and invalidation.
+- [`examples/mygo`](examples/mygo/main.go): native windows, invalidation, and Undo and Redo of the Edit menu.
 - [`examples/persistent`](examples/persistent/main.go): migrations, backups and write-behind persistence.
 - [`examples/devtools`](examples/devtools/main.go): local inspector and restoration.
 - [`examples/web`](examples/web/main.go): a native window and a web page sharing one Store through the bridge.

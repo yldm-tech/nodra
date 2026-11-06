@@ -11,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/yldm-tech/nodra"
 	"github.com/yldm-tech/nodra/bridge"
 	"github.com/yldm-tech/nodra/devtools"
+	"github.com/yldm-tech/nodra/nativeui"
 )
 
 type appState struct {
@@ -361,6 +363,25 @@ func TestBridgeFromAnotherModule(t *testing.T) {
 	if _, err := fs.Stat(bridge.Client, "nodra.js"); err != nil {
 		t.Fatalf("the client is not served: %v", err)
 	}
+}
+
+// A native UI view undoes and redoes a tracked store through the window's keys, from outside the module.
+func TestNativeUIUndoFromAnotherModule(t *testing.T) {
+	store := nodra.New(appState{})
+	history := nodra.Track(store, 10)
+	defer func() { _ = history.Close(); _ = store.Close() }()
+	if err := store.Update(func(s *appState) { s.Count = 1 }); err != nil {
+		t.Fatal(err)
+	}
+	view := ui.NewTester(func(c *ui.Context) {
+		nativeui.UndoShortcuts(c, history)
+		ui.Text(c, "view")
+	}, 200, 100)
+	view.Key(ui.Cmd, ui.KeyZ)
+	if got := store.Get().Count; got != 0 {
+		t.Fatalf("after Undo the count is %d", got)
+	}
+	nativeui.InvalidateHistory(history, nil)()
 }
 
 func TestAtomicPanicBoundaries(t *testing.T) {

@@ -39,6 +39,7 @@ _ = store.Update(func(s *State) { s.Count++ })
 - 用 `Scope` 管理资源所有权和关闭顺序。
 - MyGo 刷新绑定和本地认证 DevTools 检查器。
 - 网页桥接：MyGo 应用的网页可以跟随 Store，并通过注册的 Action 修改它。
+- 原生 UI 窗口的撤销/重做快捷键和 Edit 菜单作用于 History。
 
 ## MyGo
 
@@ -48,6 +49,18 @@ defer stop()
 ```
 
 MyGo 集成目标版本是 `v0.7.4`。临时控件状态应放在视图所有者中，共享业务状态只提交实际编辑的字段。参见 [`examples/mygo`](examples/mygo/main.go)。
+
+```go
+history := nodra.Track(store, 100)
+nativeui.InvalidateHistory(history, window) // redraw when Undo or Redo becomes possible
+
+func (app *App) view(c *ui.Context) {
+	nativeui.UndoShortcuts(c, app.history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+	// ...
+}
+```
+
+可选的 `nativeui` 子包让窗口的撤销和重做作用于 `History`：快捷键，以及 MyGo 0.7.4 起 macOS 上 Edit 菜单里的对应项，只在历史可以撤销或重做时启用。聚焦的文本框保留自己的撤销。它独立于核心包，没有原生 UI 的应用不会因此链接 MyGo 的 `ui` 包。
 
 ## 网页
 
