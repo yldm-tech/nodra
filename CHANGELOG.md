@@ -15,6 +15,13 @@
 
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 
+## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)
+
+
+### Features
+
+* **bridge:** let web pages follow a Store and dispatch actions ([#94](https://github.com/yldm-tech/nodra/issues/94)) ([1f106b7](https://github.com/yldm-tech/nodra/commit/1f106b7055f8357250278a7088e2742616618f7a))
+
 ## [1.1.0](https://github.com/yldm-tech/nodra/compare/v1.0.0...v1.1.0) (2026-10-25)
 
 
