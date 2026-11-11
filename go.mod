@@ -2,6 +2,8 @@ module github.com/yldm-tech/nodra
 
 go 1.27.3
 
+toolchain go1.27.4
+
 require (
 	github.com/egoist/mygo v0.7.4
 	github.com/gofrs/flock v0.13.1
