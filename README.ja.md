@@ -6,6 +6,8 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/yldm-tech/nodra)](go.mod)
 [![GitHub stars](https://img.shields.io/github/stars/yldm-tech/nodra?style=flat)](https://github.com/yldm-tech/nodra/stargazers)
 [![License](https://img.shields.io/github/license/yldm-tech/nodra)](LICENSE)
+[![X](https://img.shields.io/badge/X-%40suzukaze__haduki-000000?logo=x&logoColor=white)](https://x.com/suzukaze_haduki)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/houko)
 
 Nodra は Go デスクトップアプリ向けの並行安全なリアクティブ状態ライブラリです。[MyGo](https://github.com/egoist/mygo) で Zustand に似た操作感を提供し、状態をレンダラーや永続化バックエンドから分離します。
 

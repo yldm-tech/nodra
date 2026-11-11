@@ -6,6 +6,8 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/yldm-tech/nodra)](go.mod)
 [![GitHub stars](https://img.shields.io/github/stars/yldm-tech/nodra?style=flat)](https://github.com/yldm-tech/nodra/stargazers)
 [![License](https://img.shields.io/github/license/yldm-tech/nodra)](LICENSE)
+[![X](https://img.shields.io/badge/X-%40suzukaze__haduki-000000?logo=x&logoColor=white)](https://x.com/suzukaze_haduki)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/houko)
 
 Nodra is a concurrency-safe reactive state store for Go desktop applications. It provides Zustand-like ergonomics for [MyGo](https://github.com/egoist/mygo) apps while keeping state independent from the renderer and persistence backend.
 
