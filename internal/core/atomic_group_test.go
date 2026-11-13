@@ -114,3 +114,37 @@ func TestTransactionCommitsDoNotShareStateWithARetainedCandidate(t *testing.T) {
 		})
 	}
 }
+
+func TestAtomicGroupAndAtomic2RejectOneClosedParticipant(t *testing.T) {
+	paths := []struct {
+		name string
+		run  func(open, closed *Store[int]) error
+	}{
+		{"AtomicGroup", func(open, closed *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(open, func(v *int) error { *v = 2; return nil }), AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }))
+		}},
+		{"AtomicGroup closed first", func(open, closed *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }), AtomicUpdate(open, func(v *int) error { *v = 2; return nil }))
+		}},
+		{"Atomic2", func(open, closed *Store[int]) error {
+			return Atomic2(open, closed, func(a, b *int) error { *a, *b = 2, 20; return nil })
+		}},
+		{"Atomic2 closed first", func(open, closed *Store[int]) error {
+			return Atomic2(closed, open, func(a, b *int) error { *a, *b = 20, 2; return nil })
+		}},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			open, closed := New(1), New(10)
+			defer func() { _ = open.Close() }()
+			requireNoError(t, closed.Close())
+			openVersion, closedVersion := open.Version(), closed.Version()
+			if err := path.run(open, closed); !errors.Is(err, ErrClosed) {
+				t.Fatalf("err = %v, want ErrClosed", err)
+			}
+			if open.Get() != 1 || closed.Get() != 10 || open.Version() != openVersion || closed.Version() != closedVersion {
+				t.Fatalf("state changed: open %d v%d (want 1 v%d), closed %d v%d (want 10 v%d)", open.Get(), open.Version(), openVersion, closed.Get(), closed.Version(), closedVersion)
+			}
+		})
+	}
+}
