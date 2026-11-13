@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -232,7 +233,7 @@ func (i *Inspector) serveAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "JSON required", http.StatusUnsupportedMediaType)
 			return
 		}
-		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, int64(i.restoreBodyLimit())))
 		if err != nil {
 			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 			return
@@ -268,4 +269,13 @@ func (i *Inspector) serveAPI(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// restoreBodyLimit bounds a /api/restore request. It admits every state the inspector can show as restorable (up to MaxStateBytes) plus room for the JSON envelope, and never falls below the original 1 MiB cap.
+func (i *Inspector) restoreBodyLimit() int {
+	const minimum, envelope = 1 << 20, 64 << 10
+	if i.options.MaxStateBytes > math.MaxInt-envelope {
+		return math.MaxInt
+	}
+	return max(minimum, i.options.MaxStateBytes+envelope)
 }
