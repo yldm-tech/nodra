@@ -49,7 +49,7 @@ type History[T any] struct {
 	state        *Store[HistoryState]
 }
 
-// Track starts recording changes to store. limit is the maximum number of undo entries; values below one disable history recording.
+// Track starts recording changes to store. limit is the maximum number of undo entries; values below one disable history recording. Closing store does not close History: Undo and Redo then return ErrClosed and keep their stacks, CanUndo, CanRedo and Status keep reporting those stacks, and Status stays open, so close History when the store's owner is done with it.
 func Track[T any](store *Store[T], limit int) *History[T] {
 	return TrackWith(store, HistoryOptions[T]{Limit: limit})
 }
