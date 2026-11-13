@@ -408,6 +408,10 @@ func (i *Inspector) Search(query string, limit int) []uint64 {
 	var matches map[uint64]struct{}
 	for _, term := range terms {
 		current := i.search[term]
+		if len(current) == 0 {
+			// A term with no retained events makes the conjunction empty; it must not be skipped as if it were the first term.
+			return nil
+		}
 		if matches == nil {
 			matches = maps.Clone(current)
 		} else {

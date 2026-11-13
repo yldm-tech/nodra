@@ -29,3 +29,18 @@ func TestCustomEventsAreRedactedExportedAndIndexed(t *testing.T) {
 		t.Fatal("custom data lost")
 	}
 }
+
+func TestSearchRequiresEveryTermIncludingAbsentFirstTerm(t *testing.T) {
+	i := New(Options{})
+	defer func() { _ = i.Close() }()
+	mustAttach(t, i, "store", nodra.New(0))
+	mustUpdate(t, i.Record("store", CustomEvent{Kind: "network", Name: "request", Data: json.RawMessage(`{}`)}))
+	if got := i.Search("network request", 10); len(got) != 1 {
+		t.Fatalf("matching terms: %v", got)
+	}
+	for _, query := range []string{"missing", "network missing", "missing network", "missing other network", "missing missing network"} {
+		if got := i.Search(query, 10); len(got) != 0 {
+			t.Errorf("Search(%q) = %v, want no matches", query, got)
+		}
+	}
+}
