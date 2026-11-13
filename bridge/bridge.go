@@ -9,7 +9,7 @@
 //	})
 //	b.Bind()
 //
-// Pages read and follow the state through the bound service, Nodra by default: Get returns the current frame, and Watch streams a frame through a MyGo channel each time the projected value changes. Frames coalesce into the latest only while the channel holds back sends, which MyGo's flow control does once about 1 MiB of frames the page has not taken is queued for the watch, so a slow page may still receive each intermediate change. Dispatch runs a registered action with its JSON argument. Pages never write state directly. The JavaScript client in the repository's web directory wraps these calls.
+// Pages read and follow the state through the bound service, Nodra by default: Get returns the current frame, and Watch streams a frame through a MyGo channel each time the projected value changes. By default frames coalesce into the latest only while the channel holds back sends, which MyGo's flow control does once about 1 MiB of frames the page has not taken is queued for the watch, so a slow page may still receive each intermediate change; Options.FrameInterval spaces a watch's frames out, so a state that changes in bursts reaches pages as its latest value at most once per interval. Dispatch runs a registered action with its JSON argument. Pages never write state directly. The JavaScript client in the repository's web directory wraps these calls.
 package bridge
 
 import (
@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/yldm-tech/nodra"
@@ -46,6 +47,8 @@ var (
 type Options struct {
 	AllowRead     func(ctx context.Context, state string) bool
 	AllowDispatch func(ctx context.Context, action string) bool
+	// FrameInterval is the least time between two frames of one watch. Changes made meanwhile coalesce into the latest, which is sent once the interval has passed, so a page always ends up with the final value; a change after a quiet spell longer than the interval is sent at once. Use it for states that change faster than pages need to show them, such as progress, playback position or a stream of results: a display frame (about 16 ms) keeps a page from rendering every intermediate value. Zero, the default, and negative values send each change as soon as the page's channel takes it.
+	FrameInterval time.Duration
 }
 
 // Frame is a state as pages receive it: its name, the source version it was taken at and the projected value as JSON. Versions are the source's and only grow within a watch; a page that already holds a version passes it to Watch to skip a frame it has.
@@ -228,7 +231,7 @@ func (b *Bridge) Get(ctx context.Context, name string) (Frame, error) {
 	return Frame{Name: name, Version: version, Value: raw}, nil
 }
 
-// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. A page's MyGo channel blocks only once about 1 MiB of frames the page has not taken is queued, so below that a slow page receives each change. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
+// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. A page's MyGo channel blocks only once about 1 MiB of frames the page has not taken is queued, so below that a slow page receives each change, unless Options.FrameInterval holds frames apart: then changes within an interval of the last frame coalesce into the latest, sent when the interval ends. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
 func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func(Frame) error) error {
 	e, err := b.state(ctx, name)
 	if err != nil {
@@ -257,6 +260,12 @@ func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func
 					return nil
 				}
 				return err
+			}
+			if interval := b.options.FrameInterval; interval > 0 {
+				// Hold the next frame back for the interval; changes made meanwhile leave a token in changed, so the latest goes out right after it.
+				if err := waitInterval(ctx, e, interval); err != nil || ctx.Err() != nil {
+					return err
+				}
 			}
 		}
 		// Whether or not it was sent, the page holds a value equal to this one from here on.
@@ -306,6 +315,22 @@ func (b *Bridge) state(ctx context.Context, name string) (*exposure, error) {
 		return nil, fmt.Errorf("%w: state %q", ErrNotFound, name)
 	}
 	return e, nil
+}
+
+// waitInterval waits for interval, and returns ErrClosed when the state goes away meanwhile or nil when ctx ends first.
+func waitInterval(ctx context.Context, e *exposure, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return nil
+	case <-e.stopped:
+		return ErrClosed
+	case <-e.sourceDone:
+		return ErrClosed
+	}
 }
 
 func validName(name string) bool { return strings.TrimSpace(name) == name && name != "" }
