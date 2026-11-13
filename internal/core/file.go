@@ -23,9 +23,10 @@ func (JSONCodec[T]) Decode(data []byte) (T, error) {
 	return value, err
 }
 
-// FileStorage stores encoded state at Path. Save writes a temporary file in the same directory and renames it into place, so readers see a complete file.
+// FileStorage stores encoded state at Path. Save writes a temporary file in the same directory and renames it into place, so readers see a complete file. On Windows a file another handle holds open without delete sharing cannot be replaced: an antivirus or indexer scan, a sync client, or a reader such as another process's Load. Save retries such a replacement for up to about 2 s, stopping early when its context ends, and returns the error if the file is still held after that. The limit applies to each file replaced, not to the whole Save: the primary, the .bak with Backup, and the journal and commit marker with Journal each get their own, so one Save can wait several times as long, and Load's journal recovery retries the same way. The context bounds the total.
 type FileStorage struct {
 	Path string
+	// Perm is the mode of the files Save writes, including the backup; zero means 0600. On Windows only the owner-write bit (0200) has an effect: without it the files get the read-only attribute, which Save clears on the file it is about to replace, as rename on other systems ignores the old file's mode. Perm does not restrict other users on Windows.
 	Perm os.FileMode
 	// Backup writes an independent Path+".bak" copy after each successful primary replacement. A backup failure is returned even though the primary may already contain the new state. Use one Persistence writer per destination.
 	Backup bool
@@ -213,7 +214,7 @@ func writeAtomicFile(ctx context.Context, path string, data []byte, perm os.File
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err = os.Rename(name, path); err != nil {
+	if err = replaceFile(ctx, name, path); err != nil {
 		return err
 	}
 	if durable {
@@ -261,7 +262,7 @@ func (f FileStorage) save(ctx context.Context, data []byte, primarySaved func())
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err = os.Rename(name, f.Path); err != nil {
+	if err = replaceFile(ctx, name, f.Path); err != nil {
 		return fmt.Errorf("nodra: replace %s: %w", f.Path, err)
 	}
 	if f.Durable {
