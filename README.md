@@ -100,7 +100,7 @@ const counter = remoteState("counter"); // subscribe and getSnapshot fit useSync
 await dispatch("counter/add", 1);
 ```
 
-The optional `bridge` subpackage makes a Store the one source of truth for native windows and web pages alike. Pages see only what the projection returns, receive a frame when it changes (the latest one when they are slow), and change state only through the actions Go registers. The JavaScript client in [`bridge/client`](bridge/client/nodra.js) has no dependencies. See [`docs/bridge.md`](docs/bridge.md) and [`examples/web`](examples/web/main.go).
+The optional `bridge` subpackage makes a Store the one source of truth for native windows and web pages alike. Pages see only what the projection returns, receive a frame when it changes (coalesced into the latest only once about 1 MiB of frames waits for a slow page), and change state only through the actions Go registers. The JavaScript client in [`bridge/client`](bridge/client/nodra.js) has no dependencies. See [`docs/bridge.md`](docs/bridge.md) and [`examples/web`](examples/web/main.go).
 
 ## Persistence
 

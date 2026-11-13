@@ -9,7 +9,7 @@
 //	})
 //	b.Bind()
 //
-// Pages read and follow the state through the bound service, Nodra by default: Get returns the current frame, and Watch streams a frame through a MyGo channel each time the projected value changes, the latest one when the page is slower than the store. Dispatch runs a registered action with its JSON argument. Pages never write state directly. The JavaScript client in the repository's web directory wraps these calls.
+// Pages read and follow the state through the bound service, Nodra by default: Get returns the current frame, and Watch streams a frame through a MyGo channel each time the projected value changes. Frames coalesce into the latest only while the channel holds back sends, which MyGo's flow control does once about 1 MiB of frames the page has not taken is queued for the watch, so a slow page may still receive each intermediate change. Dispatch runs a registered action with its JSON argument. Pages never write state directly. The JavaScript client in the repository's web directory wraps these calls.
 package bridge
 
 import (
@@ -224,7 +224,7 @@ func (b *Bridge) Get(ctx context.Context, name string) (Frame, error) {
 	return Frame{Name: name, Version: version, Value: raw}, nil
 }
 
-// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
+// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. A page's MyGo channel blocks only once about 1 MiB of frames the page has not taken is queued, so below that a slow page receives each change. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
 func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func(Frame) error) error {
 	e, err := b.state(ctx, name)
 	if err != nil {

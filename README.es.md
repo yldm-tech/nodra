@@ -82,7 +82,7 @@ const counter = remoteState("counter"); // subscribe and getSnapshot fit useSync
 await dispatch("counter/add", 1);
 ```
 
-El subpaquete opcional `bridge` convierte un Store en la única fuente de verdad para ventanas nativas y páginas web. Las páginas solo ven lo que devuelve la proyección, reciben un frame cuando cambia (el más reciente si son lentas) y solo cambian el estado mediante las acciones que Go registra. El cliente JavaScript de [`bridge/client`](bridge/client/nodra.js) no tiene dependencias. Consulta [`docs/bridge.md`](docs/bridge.md) y [`examples/web`](examples/web/main.go).
+El subpaquete opcional `bridge` convierte un Store en la única fuente de verdad para ventanas nativas y páginas web. Las páginas solo ven lo que devuelve la proyección, reciben un frame cuando cambia (agrupados en el más reciente solo cuando una página lenta acumula cerca de 1 MiB de frames sin recoger) y solo cambian el estado mediante las acciones que Go registra. El cliente JavaScript de [`bridge/client`](bridge/client/nodra.js) no tiene dependencias. Consulta [`docs/bridge.md`](docs/bridge.md) y [`examples/web`](examples/web/main.go).
 
 ## Ejemplo completo
 

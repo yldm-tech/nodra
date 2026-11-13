@@ -180,6 +180,7 @@ func TestWatchSkipsTheVersionThePageHolds(t *testing.T) {
 	_ = result(t, done)
 }
 
+// The send here blocks while the page is busy. A page's MyGo channel blocks only once about 1 MiB of frames waits for the page, so this models a page past that window.
 func TestTheLatestFrameWinsWhileThePageIsSlow(t *testing.T) {
 	store := nodra.New(state{})
 	defer func() { _ = store.Close() }()
