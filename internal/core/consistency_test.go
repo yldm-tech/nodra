@@ -108,6 +108,55 @@ func TestWatchRetainsNewerVersionAfterDelayedNotification(t *testing.T) {
 	}
 }
 
+// A write that committed before Close may still be notifying when the Watch stream closes; the stream must end with that value anyway.
+func TestWatchDeliversAValueCommittedBeforeClose(t *testing.T) {
+	store, entered, release := delayedNotificationStore()
+	updates := store.Watch(context.Background(), 4)
+	done := make(chan error, 1)
+	go func() { done <- store.Set(1) }()
+	<-entered // version 1 is committed and its notification to the Watch listener is held back
+	requireNoError(t, store.Close())
+	var got []Snapshot[int]
+	for snapshot := range updates {
+		got = append(got, snapshot)
+	}
+	close(release)
+	requireNoError(t, <-done)
+	if len(got) != 1 || got[0].Version != 1 || got[0].Value != 1 {
+		t.Fatalf("watch received %+v before closing, want version 1 with value 1", got)
+	}
+}
+
+func TestWatchDoesNotRepeatAValueItDelivered(t *testing.T) {
+	store := New(0)
+	updates := store.Watch(context.Background(), 4)
+	requireNoError(t, store.Set(1))
+	requireNoError(t, store.Close())
+	var got []Snapshot[int]
+	for snapshot := range updates {
+		got = append(got, snapshot)
+	}
+	if len(got) != 1 || got[0].Version != 1 {
+		t.Fatalf("watch received %+v, want version 1 once", got)
+	}
+}
+
+func TestWatchDeliversTheFinalValueOfABatchClosedInside(t *testing.T) {
+	store := New(0)
+	updates := store.Watch(context.Background(), 4)
+	requireNoError(t, store.Batch(func() {
+		requireNoError(t, store.Set(1))
+		requireNoError(t, store.Close())
+	}))
+	var got []Snapshot[int]
+	for snapshot := range updates {
+		got = append(got, snapshot)
+	}
+	if final := store.Snapshot(); len(got) != 1 || got[0] != final {
+		t.Fatalf("watch received %+v, want the final %+v", got, final)
+	}
+}
+
 func TestSubscribeEqualityDoesNotRegressAfterDelayedNotification(t *testing.T) {
 	store, entered, release := delayedNotificationStore()
 	var values []int
