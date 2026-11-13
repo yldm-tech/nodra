@@ -280,6 +280,7 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 		var err error
 		a.markTime(&task.workStarted)
 		attempts := max(1, a.options.Retry.MaxAttempts)
+		backoff := a.options.Retry.Backoff
 		for attempt := 1; attempt <= attempts; attempt++ {
 			a.mu.Lock()
 			task.attempt = attempt
@@ -299,19 +300,25 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 			if err == nil || attempt == attempts || context.Cause(task.ctx) != nil {
 				break
 			}
-			backoff := a.options.Retry.Backoff
-			for n := 1; n < attempt; n++ {
+			delay := backoff
+			if a.options.Retry.MaxBackoff > 0 {
+				delay = min(delay, a.options.Retry.MaxBackoff)
+			}
+			// Saturate instead of overflowing, so a large MaxAttempts never wraps the delay to zero or a negative value.
+			if backoff > math.MaxInt64/2 {
+				backoff = math.MaxInt64
+			} else {
 				backoff *= 2
 			}
-			if a.options.Retry.MaxBackoff > 0 {
-				backoff = min(backoff, a.options.Retry.MaxBackoff)
-			}
-			timer := time.NewTimer(backoff)
+			timer := time.NewTimer(delay)
 			select {
 			case <-task.ctx.Done():
-				timer.Stop()
-				err = context.Cause(task.ctx)
 			case <-timer.C:
+			}
+			timer.Stop()
+			// Cancellation during the delay ends the run without another work call; the cause is returned below.
+			if context.Cause(task.ctx) != nil {
+				break
 			}
 		}
 		a.markTime(&task.workFinished)
