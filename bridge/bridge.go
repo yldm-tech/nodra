@@ -47,7 +47,7 @@ var (
 type Options struct {
 	AllowRead     func(ctx context.Context, state string) bool
 	AllowDispatch func(ctx context.Context, action string) bool
-	// FrameInterval is the least time between two frames of one watch. Changes made meanwhile coalesce into the latest, which is sent once the interval has passed, so a page always ends up with the final value; a change after a quiet spell longer than the interval is sent at once. Use it for states that change faster than pages need to show them, such as progress, playback position or a stream of results: a display frame (about 16 ms) keeps a page from rendering every intermediate value. Zero, the default, and negative values send each change as soon as the page's channel takes it.
+	// FrameInterval is the least time between two frames of one watch. Changes made meanwhile coalesce into the latest, which is sent once the interval has passed, so a page always ends up with the final value, also when the source closes meanwhile: its final value still goes out when the interval ends, and then the watch ends with ErrClosed. Stopping the exposure or closing the bridge ends the watch at once instead, and a change it is holding back is not sent. A change after a quiet spell longer than the interval is sent at once. Use it for states that change faster than pages need to show them, such as progress, playback position or a stream of results: a display frame (about 16 ms) keeps a page from rendering every intermediate value. Zero, the default, and negative values send each change as soon as the page's channel takes it.
 	FrameInterval time.Duration
 }
 
@@ -231,7 +231,7 @@ func (b *Bridge) Get(ctx context.Context, name string) (Frame, error) {
 	return Frame{Name: name, Version: version, Value: raw}, nil
 }
 
-// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. A page's MyGo channel blocks only once about 1 MiB of frames the page has not taken is queued, so below that a slow page receives each change, unless Options.FrameInterval holds frames apart: then changes within an interval of the last frame coalesce into the latest, sent when the interval ends. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
+// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. A page's MyGo channel blocks only once about 1 MiB of frames the page has not taken is queued, so below that a slow page receives each change, unless Options.FrameInterval holds frames apart: then changes within an interval of the last frame coalesce into the latest, sent when the interval ends. When the source closes, the page still receives its final value: Watch sends it if it differs from the last frame sent, after the interval if one is set, and then returns ErrClosed. When the exposure stops or the bridge closes, Watch returns ErrClosed at once and sends nothing more, not even a change it is holding back. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching.
 func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func(Frame) error) error {
 	e, err := b.state(ctx, name)
 	if err != nil {
@@ -247,7 +247,7 @@ func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func
 	})
 	defer unsubscribe()
 	var last json.RawMessage
-	first := true
+	first, closing := true, false
 	for {
 		version, raw, err := e.read()
 		if err != nil {
@@ -261,12 +261,15 @@ func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func
 				}
 				return err
 			}
-			if interval := b.options.FrameInterval; interval > 0 {
+			if interval := b.options.FrameInterval; interval > 0 && !closing {
 				// Hold the next frame back for the interval; changes made meanwhile leave a token in changed, so the latest goes out right after it.
-				if err := waitInterval(ctx, e, interval); err != nil || ctx.Err() != nil {
+				if err := waitInterval(ctx, e, interval, raw); err != nil || ctx.Err() != nil {
 					return err
 				}
 			}
+		}
+		if closing {
+			return ErrClosed
 		}
 		// Whether or not it was sent, the page holds a value equal to this one from here on.
 		last, first = raw, false
@@ -277,7 +280,8 @@ func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func
 		case <-e.stopped:
 			return ErrClosed
 		case <-e.sourceDone:
-			return ErrClosed
+			// The source publishes nothing more, but its last change may not have been sent: select picks among ready cases at random, so a token may still wait in changed. A closed source still reads its final value, so read it once more and send it if the page does not hold it.
+			closing = true
 		}
 	}
 }
@@ -317,19 +321,29 @@ func (b *Bridge) state(ctx context.Context, name string) (*exposure, error) {
 	return e, nil
 }
 
-// waitInterval waits for interval, and returns ErrClosed when the state goes away meanwhile or nil when ctx ends first.
-func waitInterval(ctx context.Context, e *exposure, interval time.Duration) error {
+// waitInterval waits for interval after a frame carrying sent, and returns nil when it passes or ctx ends first, and ErrClosed when the exposure stops meanwhile. When the source closes meanwhile it returns ErrClosed at once if the source's final value is sent, and otherwise keeps waiting, so the final value goes out no sooner than any other frame.
+func waitInterval(ctx context.Context, e *exposure, interval time.Duration, sent json.RawMessage) error {
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return nil
-	case <-e.stopped:
-		return ErrClosed
-	case <-e.sourceDone:
-		return ErrClosed
+	sourceDone := e.sourceDone
+	for {
+		select {
+		case <-timer.C:
+			return nil
+		case <-ctx.Done():
+			return nil
+		case <-e.stopped:
+			return ErrClosed
+		case <-sourceDone:
+			_, raw, err := e.read()
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(raw, sent) {
+				return ErrClosed
+			}
+			sourceDone = nil
+		}
 	}
 }
 
