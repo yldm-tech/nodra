@@ -319,7 +319,7 @@ func joinMessages(a, b string) string {
 func (i *Inspector) encode(id string, value any) (json.RawMessage, string) {
 	raw, err := json.Marshal(value)
 	if err == nil && i.options.Redact != nil {
-		raw, err = i.options.Redact(id, raw)
+		raw, err = i.redactState(id, raw)
 	}
 	if err != nil {
 		return nil, err.Error()

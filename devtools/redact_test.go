@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -135,5 +136,56 @@ func TestMetadataRedactorFailureAndPanicFailClosed(t *testing.T) {
 				t.Fatal("redaction changed task correlation")
 			}
 		})
+	}
+}
+
+func TestStateRedactorPanicIsContained(t *testing.T) {
+	var armed atomic.Bool
+	armed.Store(true)
+	i := New(Options{Redact: func(_ string, raw json.RawMessage) (json.RawMessage, error) {
+		if armed.Load() {
+			panic("private-state")
+		}
+		return raw, nil
+	}})
+	defer func() { _ = i.Close() }()
+	store := nodra.New(0)
+	var detach func()
+	var err error
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				t.Fatalf("state Redact panic escaped into Attach: %v", recovered)
+			}
+		}()
+		detach, err = Attach(i, "store", store)
+	}()
+	mustUpdate(t, err)
+	defer detach()
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				t.Fatalf("state Redact panic escaped into Store.Set: %v", recovered)
+			}
+		}()
+		mustUpdate(t, store.Set(1))
+	}()
+	snapshot := i.Snapshot()
+	raw, err := json.Marshal(snapshot)
+	mustUpdate(t, err)
+	if strings.Contains(string(raw), "private-") {
+		t.Fatalf("panic value retained: %s", raw)
+	}
+	if snapshot.Stores[0].Error != "state redaction failed" || snapshot.Stores[0].State != nil || snapshot.Stores[0].Restorable {
+		t.Fatalf("store view after redactor panic: %+v", snapshot.Stores[0])
+	}
+	if last := snapshot.Events[len(snapshot.Events)-1]; last.Kind != "mutation" || last.Error != "state redaction failed" || last.State != nil {
+		t.Fatalf("mutation event after redactor panic: %+v", last)
+	}
+	// The inspector remains usable once the redactor stops panicking.
+	armed.Store(false)
+	mustUpdate(t, store.Set(2))
+	if view := i.Snapshot().Stores[0]; view.Error != "" || string(view.State) != "2" {
+		t.Fatalf("inspector did not recover: %+v", view)
 	}
 }
