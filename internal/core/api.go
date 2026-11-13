@@ -94,7 +94,7 @@ func selectorEqual[V any](previous, next V) bool {
 	return reflect.DeepEqual(previous, next)
 }
 
-// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes and only notifies listeners when the selected value changes. Reference values and listener arguments remain read-only.
+// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes and only notifies listeners when the selected value changes. Done is closed by Close; closing a source does not close the derived value, which keeps its last value. Reference values and listener arguments remain read-only.
 type Derived[T any, V any] struct {
 	source            *Store[T]
 	selector          func(T) V
@@ -108,14 +108,22 @@ type Derived[T any, V any] struct {
 	nextID            uint64
 	stop              func()
 	closed            bool
+	done              chan struct{}
 	height            int
+}
+
+// closedDerived is the result of an invalid construction: closed from the start, with Done already closed.
+func closedDerived[T, V any]() *Derived[T, V] {
+	done := make(chan struct{})
+	close(done)
+	return &Derived[T, V]{closed: true, done: done}
 }
 
 func (d *Derived[T, V]) transactionHeight() int { return d.height }
 
 func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	if !validObservable(source) {
-		return &Derived[T, V]{closed: true}
+		return closedDerived[T, V]()
 	}
 	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1)
 }
@@ -124,16 +132,17 @@ func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(
 func DeriveProjection[T any, V any](source Reader[T], project func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	store := sourceStore(source)
 	if store == nil {
-		return &Derived[T, V]{closed: true}
+		return closedDerived[T, V]()
 	}
 	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals, 1)
 }
 
 // derive builds a derived value at height, which is one more than the height of its highest source.
 func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool, height int) *Derived[T, V] {
-	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V)), height: height}
+	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V)), done: make(chan struct{}), height: height}
 	if selector == nil {
 		d.closed = true
+		close(d.done)
 		return d
 	}
 	initial := snapshot()
@@ -230,6 +239,14 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 	initialized = true
 	return d
 }
+
+// Done is closed when Close detaches the derived value, and is already closed for one built from an invalid source or a nil selector. It is nil for a nil Derived.
+func (d *Derived[T, V]) Done() <-chan struct{} {
+	if d == nil {
+		return nil
+	}
+	return d.done
+}
 func (d *Derived[T, V]) Get() V { d.mu.RLock(); defer d.mu.RUnlock(); return d.value }
 func (d *Derived[T, V]) Subscribe(fn func(V)) func() {
 	if d == nil || fn == nil {
@@ -262,6 +279,9 @@ func (d *Derived[T, V]) Close() error {
 	}
 	d.listeners = nil
 	d.snapshotListeners = nil
+	if d.done != nil {
+		close(d.done)
+	}
 	return nil
 }
 
