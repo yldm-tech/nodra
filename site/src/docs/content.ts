@@ -103,7 +103,9 @@ func main() {
 		],
 		file: 'update_err.go',
 		code: `err := store.UpdateErr(func(state *State) error {
-	items := maps.Clone(state.Items)
+	// make, not maps.Clone: the zero State has a nil map, and a clone of nil is nil.
+	items := make(map[string]Item, len(state.Items)+1)
+	maps.Copy(items, state.Items)
 	items["word"] = updatedItem
 	state.Items = items
 	return validate(*state)
