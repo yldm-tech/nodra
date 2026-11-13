@@ -90,12 +90,22 @@ func TestWatchStopsWithContext(t *testing.T) {
 		if snapshot.Value != 1 {
 			t.Fatalf("value = %d", snapshot.Value)
 		}
-	case <-context.Background().Done():
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for update")
 	}
 	cancel()
+	// The cancel takes effect asynchronously, so this update may still be delivered; the channel must close either way.
 	requireNoError(t, store.Set(2))
-	for range updates {
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case _, ok := <-updates:
+			if !ok {
+				return
+			}
+		case <-deadline:
+			t.Fatal("watch channel not closed after cancel")
+		}
 	}
 }
 
