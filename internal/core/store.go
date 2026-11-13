@@ -221,6 +221,7 @@ func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error)
 		return err
 	}
 	first.value, second.value = first.copy(firstNext), second.copy(secondNext)
+	firstBefore, secondBefore = first.transactionBoundaryLocked(firstBefore), second.transactionBoundaryLocked(secondBefore)
 	first.version++
 	second.version++
 	transactionID := nextTransactionID.Add(1)
@@ -246,6 +247,19 @@ func Atomic2[A, B any](first *Store[A], second *Store[B], fn func(*A, *B) error)
 	return nil
 }
 
+// transactionBoundaryLocked runs once a transaction has assigned its value and returns the value subscribers last received. A transaction that commits into an open batch also publishes the batch's earlier writes, so it becomes the batch's publication boundary: the batch then publishes only the writes made after it.
+func (s *Store[T]) transactionBoundaryLocked(before T) T {
+	if s.batch == 0 {
+		return before
+	}
+	published := s.batchBefore
+	s.batchBefore = s.value
+	s.dirty = false
+	s.batchType = ""
+	s.batchName = ""
+	return published
+}
+
 func (s *Store[T]) publishLocked(before T, kind MutationType, name string) (Snapshot[T], []listener[T], []func(Mutation[T])) {
 	return Snapshot[T]{Value: s.value, Version: s.version, TransactionID: s.transactionID}, s.listenersCopyLocked(), s.mutationListenersCopyLocked()
 }
@@ -258,7 +272,7 @@ func (s *Store[T]) Batch(fn func()) error {
 	return s.BatchErr(func() error { fn(); return nil })
 }
 
-// BatchErr groups notifications like Batch and returns the callback's error. Updates completed before an error remain committed, but their subscribers are still notified once when the outermost batch ends.
+// BatchErr groups notifications like Batch and returns the callback's error. Updates completed before an error remain committed, but their subscribers are still notified once when the outermost batch ends. Reads inside the batch see its writes under the version published last; the batch's publication gives them a new version. An Atomic2 or AtomicGroup commit into the store while the batch is open publishes the batch's earlier writes with the transaction, and the batch then publishes only the writes made after it. Closing the store inside the batch drops the publication but still gives the final value a version of its own.
 func (s *Store[T]) BatchErr(fn func() error) error {
 	if fn == nil {
 		return nil
@@ -304,6 +318,14 @@ func (s *Store[T]) Close() error {
 		return ErrClosed
 	}
 	s.closed = true
+	if s.dirty {
+		// The open batch can no longer publish. Keep its committed writes from being readable under a version already published with an older value.
+		s.version++
+		s.transactionID = 0
+		s.dirty = false
+		s.batchType = ""
+		s.batchName = ""
+	}
 	close(s.done)
 	s.listeners = nil
 	s.mutationListeners = nil

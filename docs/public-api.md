@@ -10,7 +10,7 @@ Create a store with `nodra.New`, `nodra.NewWithClone`, or `nodra.Create`. `Store
 | --- | --- | --- |
 | Read | `Get`, `State`, `Snapshot`, `Version`, `ReadOnly` | Snapshots carry a monotonic version. `NewWithClone` isolates owned mutable data. |
 | Write | `Set`, `Update`, `UpdateErr`, `Transaction`, `Reset`, `Patch` | Failed mutation callbacks and panics do not publish a candidate. Callbacks run under the store's lock: they may read other stores but must not write to any store or call methods of their own store. Mutable references follow the ownership policy below. `ErrClosed` rejects writes after close. |
-| Group notifications | `Batch`, `BatchErr` | Successful writes remain committed when the batch callback fails; the outermost batch publishes once. Use transactions for rollback. |
+| Group notifications | `Batch`, `BatchErr` | Successful writes remain committed when the batch callback fails; the outermost batch publishes once. An `Atomic2` or `AtomicGroup` commit into the store during the batch publishes the earlier writes with the transaction, and the batch then publishes only later ones. Use transactions for rollback. |
 | Observe | `Subscribe`, `SubscribeWith`, `SubscribeSnapshot`, `SubscribeMutations`, `Watch` | Callbacks run after the store lock is released. Unsubscribe functions are idempotent. |
 | Actions | `Do`, `Action`, `SubscribeActions`, `SubscribeActionHooks`, `SubscribeActionTrace`, `TaskSnapshot`, `ActiveTasks` | Action metadata is published after the mutation boundary. |
 | Lifecycle | `ID`, `Done`, `Close` | Close removes subscribers and closes active watch streams. The final value remains readable; repeated Close returns `ErrClosed`. |

@@ -123,3 +123,55 @@ func TestAtomic2OrdersLocksAndBlocksReaders(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestAtomicCommitInsideABatchIsItsOwnPublicationBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		commit func(s, other *Store[int]) error
+	}{
+		{"Atomic2", func(s, other *Store[int]) error {
+			return Atomic2(s, other, func(a, _ *int) error { *a = 2; return nil })
+		}},
+		{"AtomicGroup", func(s, other *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(s, func(a *int) error { *a = 2; return nil }), AtomicUpdate(other, func(b *int) error { *b = 9; return nil }))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, other := New(0), New(0)
+			var snapshots []Snapshot[int]
+			var mutations []Mutation[int]
+			s.Subscribe(func(snapshot Snapshot[int]) { snapshots = append(snapshots, snapshot) })
+			s.SubscribeMutations(func(mutation Mutation[int]) { mutations = append(mutations, mutation) })
+			requireNoError(t, s.Batch(func() {
+				requireNoError(t, s.Set(1))
+				requireNoError(t, tc.commit(s, other))
+				requireNoError(t, s.Set(3))
+			}))
+			if len(snapshots) != 2 || snapshots[0].Value != 2 || snapshots[0].TransactionID == 0 || snapshots[1].Value != 3 || snapshots[1].TransactionID != 0 {
+				t.Fatalf("snapshots = %+v, want the transaction value 2 and then the batch value 3", snapshots)
+			}
+			if len(mutations) != 2 {
+				t.Fatalf("mutations = %+v", mutations)
+			}
+			// Each Previous is the value subscribers last received, not an unpublished in-batch value.
+			if mutations[0].Type != MutationTransaction || mutations[0].Previous != 0 || mutations[0].Value != 2 {
+				t.Fatalf("transaction mutation = %+v, want 0 -> 2", mutations[0])
+			}
+			if mutations[1].Type != MutationDirect || mutations[1].Previous != 2 || mutations[1].Value != 3 {
+				t.Fatalf("batch mutation = %+v, want 2 -> 3", mutations[1])
+			}
+
+			snapshots, mutations = nil, nil
+			requireNoError(t, s.Batch(func() {
+				requireNoError(t, s.Set(4))
+				requireNoError(t, tc.commit(s, other))
+			}))
+			if len(snapshots) != 1 || snapshots[0].Value != 2 {
+				t.Fatalf("batch ending with the transaction published %+v, want only the transaction value", snapshots)
+			}
+			if len(mutations) != 1 || mutations[0].Previous != 3 {
+				t.Fatalf("mutations = %+v, want one transaction from 3", mutations)
+			}
+		})
+	}
+}

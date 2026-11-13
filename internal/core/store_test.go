@@ -171,3 +171,28 @@ func TestUpdateCallbackReadsAnotherStoreWhileATransactionWaits(t *testing.T) {
 		t.Fatalf("transaction values = %d, %d", c.Get(), d.Get())
 	}
 }
+
+func TestCloseInsideABatchGivesTheFinalValueANewVersion(t *testing.T) {
+	store := New(0)
+	requireNoError(t, store.Set(1))
+	published := store.Snapshot()
+	if err := store.Batch(func() {
+		requireNoError(t, store.Set(2))
+		requireNoError(t, store.Close())
+	}); err != nil {
+		t.Fatal(err)
+	}
+	final := store.Snapshot()
+	if final.Value != 2 {
+		t.Fatalf("final value = %d, want the committed 2", final.Value)
+	}
+	if final.Version <= published.Version {
+		t.Fatalf("final snapshot %+v reuses version %d, which was published with value %d", final, published.Version, published.Value)
+	}
+	if err := store.Close(); err != ErrClosed {
+		t.Fatalf("second Close = %v, want ErrClosed", err)
+	}
+	if got := store.Snapshot(); got != final {
+		t.Fatalf("snapshot after repeated Close = %+v, want %+v", got, final)
+	}
+}

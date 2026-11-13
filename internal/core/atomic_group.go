@@ -58,6 +58,7 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 				commit: func(transactionID uint64) atomicNotification {
 					store.transactionID = transactionID
 					store.value = prepared
+					before = store.transactionBoundaryLocked(before)
 					store.version++
 					snapshot, listeners, mutations := store.publishLocked(before, MutationTransaction, "atomic-group")
 					return atomicNotification{notify: func(id uint64) {
