@@ -202,3 +202,31 @@ test("a listener that throws does not keep the others from the watch's failure",
   assert.equal(second, 1, "the second listener missed the failure");
   assert.deepEqual(reported, [bug]);
 });
+
+test("ready without a running watch asks Go for the current value, not the one the page held", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  const first = state.ready();
+  runtime.watches[0].send({ name: "s", version: 1, value: "old" });
+  assert.equal(await first, "old");
+  assert.equal(runtime.watches[0].channel.closed, true);
+  // Go moves on to "new" while the page follows nothing.
+  const second = state.ready();
+  assert.equal(runtime.watches.length, 2);
+  assert.equal(runtime.watches[1].after, 0, "the watch must send the current frame whatever the page holds");
+  assert.equal(runtime.watches[1].channel.closed, false, "the watch closed before Go answered");
+  runtime.watches[1].send({ name: "s", version: 2, value: "new" });
+  assert.equal(await second, "new");
+  assert.equal(runtime.watches[1].channel.closed, true, "ready alone keeps no watch open");
+});
+
+test("ready while a watch runs resolves with the value it keeps current", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  const stop = state.subscribe(() => {});
+  runtime.watches[0].send({ name: "s", version: 1, value: "one" });
+  assert.equal(await state.ready(), "one");
+  assert.equal(runtime.watches.length, 1);
+  assert.equal(runtime.watches[0].channel.closed, false);
+  stop();
+});

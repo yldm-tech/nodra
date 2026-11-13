@@ -31,7 +31,7 @@ export interface RemoteState<T> {
   hasValue(): boolean;
   /** Calls listener after every frame and when the watch fails. Each call is its own subscription, even for a listener already subscribed, and its function ends only that one. An error a listener throws is reported as uncaught, with reportError where the page has it, and does not keep the other listeners from being called. The first subscriber starts the watch; the last one to unsubscribe stops it. */
   subscribe(listener: () => void): () => void;
-  /** Resolves with the value once one arrived, and rejects when the watch fails first. */
+  /** Resolves with the current value: while a watch runs, the one it keeps; otherwise the first frame of a watch it starts, which Go sends whatever version the page holds, so a value held from an ended watch is not taken for the current one. Rejects when the watch fails first. */
   ready(): Promise<T>;
 }
 

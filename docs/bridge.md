@@ -89,7 +89,7 @@ function Count() {
 }
 ```
 
-`ready()` resolves with the first value. `getError()` tells why a watch ended, such as a state that is not exposed (`ErrNotFound`), a page that is not allowed (`ErrDenied`) or a state that went away (`ErrClosed`); listeners are called then too, and a later subscriber tries again. `getState(name)` reads a frame once without following the state. Every function takes `{ service }` for a bridge bound with `BindAs`.
+`ready()` resolves with the current value: the one a running watch keeps, or else the first frame of a watch it starts for the call, so a value the page held from an ended watch is not mistaken for the current one. `getError()` tells why a watch ended, such as a state that is not exposed (`ErrNotFound`), a page that is not allowed (`ErrDenied`) or a state that went away (`ErrClosed`); listeners are called then too, and a later subscriber tries again. `getState(name)` reads a frame once without following the state. Every function takes `{ service }` for a bridge bound with `BindAs`.
 
 ## The service
 
