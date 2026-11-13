@@ -413,7 +413,7 @@ persistence := nodra.NewPersistence(store,
 	nodra.FileStorage{Path: "state.json"},
 	nodra.JSONCodec[State]{},
 )
-// Load first: autosave writes the current state at once. A missing file is a first start; stop on any other error.
+// Load first, or autosave overwrites state.json with the zero State.
 if err := persistence.Load(context.Background()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 	return err
 }
@@ -451,7 +451,7 @@ return scope.Close(shutdownCtx)`,
 		file: 'window.go',
 		code: `mygo.App.WhenReady(func() {
 	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
-	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	// Redraws until the window closes; do not defer the returned stop here.
 	nodra.InvalidateSelector(store, window, func(s State) int {
 		return s.Count
 	})
@@ -486,7 +486,7 @@ mygo.App.WhenReady(func() {
 			// ... the rest of the view
 		}),
 	})
-	// Stops when the window closes; a defer here would stop it as soon as WhenReady returns.
+	// Stops when the window closes; do not defer the returned stop here.
 	nativeui.InvalidateHistory(history, window)
 })
 if err := mygo.App.Run(); err != nil {
@@ -516,7 +516,7 @@ if err := mygo.App.Run(); err != nil {
 			['bridge.Client', 'var Client fs.FS', 'JavaScript 客户端 nodra.js 及其类型 nodra.d.ts，供从 Go 提供页面的应用使用；使用打包工具的应用把这两个文件复制到前端。', 'The JavaScript client nodra.js and its types nodra.d.ts, for apps that serve their pages from Go; apps with a bundler copy the two files into their frontend.'],
 		],
 		file: 'bridge.go',
-		code: `// PageState is what pages see. Values are encoded with encoding/json, so the tag makes the page read state.count; without it the key is Count.
+		code: `// Frames use encoding/json: the tag lets the page read state.count.
 type PageState struct {
 	Count int \`json:"count"\`
 }
