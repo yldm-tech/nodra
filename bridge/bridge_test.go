@@ -395,13 +395,15 @@ func TestInvalidArgumentsAndAClosedBridge(t *testing.T) {
 	var nilStore *nodra.Store[state]
 	noop := func(context.Context, int) error { return nil }
 	for name, err := range map[string]error{
-		"empty name":       second(bridge.Expose(b, "", store)),
-		"padded name":      second(bridge.Expose(b, " s", store)),
-		"nil source":       second(bridge.Expose[state](b, "s", nil)),
-		"typed nil source": second(bridge.Expose[state](b, "s", nilStore)),
-		"nil projection":   second(bridge.ExposeProjection[state, int](b, "s", store, nil)),
-		"nil bridge":       second(bridge.Expose(nil, "s", store)),
-		"nil handler":      second(bridge.Handle[int](b, "a", nil)),
+		"empty name":             second(bridge.Expose(b, "", store)),
+		"padded name":            second(bridge.Expose(b, " s", store)),
+		"nil source":             second(bridge.Expose[state](b, "s", nil)),
+		"typed nil source":       second(bridge.Expose[state](b, "s", nilStore)),
+		"zero read-only":         second(bridge.Expose[state](b, "s", nodra.ReadOnly[state]{})),
+		"zero read-only pointer": second(bridge.Expose[state](b, "s", &nodra.ReadOnly[state]{})),
+		"nil projection":         second(bridge.ExposeProjection[state, int](b, "s", store, nil)),
+		"nil bridge":             second(bridge.Expose(nil, "s", store)),
+		"nil handler":            second(bridge.Handle[int](b, "a", nil)),
 	} {
 		if !errors.Is(err, bridge.ErrInvalid) {
 			t.Errorf("%s: %v, want ErrInvalid", name, err)
