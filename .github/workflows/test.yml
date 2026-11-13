@@ -156,7 +156,7 @@ jobs:
           go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=10s -parallel=2 ./internal/core
           go test -run '^$' -bench=. -benchtime=1x ./...
 
-  # The other Go jobs follow go.mod's toolchain line, so they never build with the minimum that consumers get from the go line and docs/support.md. This job runs that minimum, and GOTOOLCHAIN names it exactly so the toolchain line cannot switch it to a newer release.
+  # The other Go jobs install Go with go-version-file, which resolves to go.mod's toolchain line, so they never build with the minimum that consumers get from the go line and docs/support.md. This job reads the go line and passes it to setup-go as go-version instead. setup-go then exports GOTOOLCHAIN=local, which keeps the go command on the installed release and stops the toolchain line from switching it, and the verify step fails the job if the go command reports any other version.
   go-minimum:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -171,7 +171,6 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "GOTOOLCHAIN=go$version" >> "$GITHUB_ENV"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ steps.minimum.outputs.version }}
