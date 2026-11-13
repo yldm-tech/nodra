@@ -175,3 +175,22 @@ func TestAtomicCommitInsideABatchIsItsOwnPublicationBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestPlainUpdateAfterATransactionHasNoTransactionID(t *testing.T) {
+	a, b := New(0), New(0)
+	defer func() { _ = a.Close(); _ = b.Close() }()
+	requireNoError(t, Atomic2(a, b, func(x, y *int) error { *x, *y = 1, 1; return nil }))
+	if a.Snapshot().TransactionID == 0 {
+		t.Fatal("the transaction's snapshot has no transaction ID")
+	}
+	var published []uint64
+	stop := a.SubscribeSnapshot(func(s Snapshot[int]) { published = append(published, s.TransactionID) })
+	defer stop()
+	requireNoError(t, a.Set(2))
+	if got := a.Snapshot().TransactionID; got != 0 {
+		t.Fatalf("a plain Set after Atomic2 kept transaction ID %d", got)
+	}
+	if len(published) == 0 || published[len(published)-1] != 0 {
+		t.Fatalf("published transaction IDs = %v, want the Set's to be 0", published)
+	}
+}
