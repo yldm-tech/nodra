@@ -62,10 +62,13 @@ func main() {
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
 })
-defer stop()
 ```
 
 MyGo 集成目标版本是 `v0.7.4`。临时控件状态应放在视图所有者中，共享 Store 只提交实际编辑的字段。最小的原生窗口示例见 [`examples/mygo`](examples/mygo/main.go)。

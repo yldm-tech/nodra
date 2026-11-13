@@ -62,10 +62,13 @@ func main() {
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
 })
-defer stop()
 ```
 
 MyGo の対象バージョンは `v0.7.4` です。一時的なウィジェット状態はビュー所有者に置き、共有 Store には編集したフィールドだけを書き戻します。最小のネイティブウィンドウの例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
