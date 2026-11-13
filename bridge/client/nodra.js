@@ -39,6 +39,8 @@ export function remoteState(name, options = {}) {
   let channel = null;
   // Whether the running watch delivered a frame, which makes the value current.
   let framed = false;
+  // Whether the running watch resumed from the version the page held: Go skips its first frame while that version is current, so it may never send one.
+  let resumed = false;
   // Each watch has a generation: frames and results of a stopped watch are ignored.
   let generation = 0;
 
@@ -58,6 +60,7 @@ export function remoteState(name, options = {}) {
     const current = ++generation;
     error = undefined;
     framed = false;
+    resumed = after !== 0;
     channel = runtime.channel((frame) => {
       if (current !== generation) return;
       value = frame.value;
@@ -86,11 +89,16 @@ export function remoteState(name, options = {}) {
     open?.close();
   }
 
-  // Adds a subscription and starts a watch if none runs: from the version the page holds, or, when fresh, from none, so Go sends its current frame.
+  // Adds a subscription and starts a watch if none runs, from the version the page holds. A fresh subscription needs a watch that will send Go's current frame: it starts one from no version, and restarts a running watch that resumed from the version the page holds and has sent nothing, since Go may never send that one a frame.
   function listen(listener, fresh) {
     const entry = { listener };
     listeners.add(entry);
-    if (!channel) start(received && !fresh ? version : 0);
+    if (!channel) {
+      start(received && !fresh ? version : 0);
+    } else if (fresh && resumed && !framed) {
+      stop();
+      start(0);
+    }
     return () => {
       if (listeners.delete(entry) && listeners.size === 0) stop();
     };
@@ -104,10 +112,10 @@ export function remoteState(name, options = {}) {
     hasValue: () => received,
     subscribe: (listener) => listen(listener, false),
     ready() {
-      if (received && channel) return Promise.resolve(value);
+      // Only a frame of the running watch makes the value current; a value held from an ended watch may be stale.
+      if (channel && framed) return Promise.resolve(value);
       return new Promise((resolve, reject) => {
-        // With no watch running, the value the page holds may be stale: ready starts one that sends Go's current frame, and only a frame or the failure of that watch settles it.
-        const fresh = !channel;
+        // ready waits for a watch that sends Go's current frame, and only a frame or the failure of that watch settles it.
         // A runtime may deliver the first frame while subscribe runs, before unsubscribe exists: settle again after it.
         let unsubscribe = null;
         let settled = false;
@@ -117,13 +125,13 @@ export function remoteState(name, options = {}) {
             settled = true;
             unsubscribe();
             reject(error);
-          } else if (fresh ? framed : received) {
+          } else if (framed) {
             settled = true;
             unsubscribe();
             resolve(value);
           }
         };
-        unsubscribe = listen(settle, fresh);
+        unsubscribe = listen(settle, true);
         settle();
       });
     },

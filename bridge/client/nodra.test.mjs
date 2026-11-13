@@ -230,3 +230,63 @@ test("ready while a watch runs resolves with the value it keeps current", async 
   assert.equal(runtime.watches[0].channel.closed, false);
   stop();
 });
+
+test("two ready calls in one tick both wait for Go's current frame", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  const first = state.ready();
+  runtime.watches[0].send({ name: "s", version: 1, value: "old" });
+  assert.equal(await first, "old");
+  // Go moves on to "new" while the page follows nothing; two handlers then ask at once.
+  let settled = 0;
+  const a = state.ready().then((v) => { settled++; return v; });
+  const b = state.ready().then((v) => { settled++; return v; });
+  await flush();
+  assert.equal(settled, 0, "a ready() settled before Go answered, from the value held by an ended watch");
+  assert.equal(runtime.watches.length, 2, "the second ready() shares the watch the first one started");
+  assert.equal(runtime.watches[1].after, 0);
+  runtime.watches[1].send({ name: "s", version: 2, value: "new" });
+  assert.deepEqual(await Promise.all([a, b]), ["new", "new"]);
+  assert.equal(runtime.watches[1].channel.closed, true, "ready alone keeps no watch open");
+});
+
+test("ready after a subscription resumed waits for a frame Go is sure to send", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  let stop = state.subscribe(() => {});
+  runtime.watches[0].send({ name: "s", version: 1, value: "old" });
+  stop();
+  // The component mounts again, which resumes from version 1, and a handler asks at once.
+  let seen = 0;
+  stop = state.subscribe(() => seen++);
+  assert.equal(runtime.watches[1].after, 1);
+  let settled = false;
+  const ready = state.ready().then((v) => { settled = true; return v; });
+  await flush();
+  assert.equal(settled, false, "ready() settled from the held value before Go answered");
+  assert.equal(runtime.watches.length, 3, "the resumed watch, which Go may never send a frame, was not restarted");
+  assert.equal(runtime.watches[1].channel.closed, true);
+  assert.equal(runtime.watches[2].after, 0);
+  runtime.watches[2].send({ name: "s", version: 2, value: "new" });
+  assert.equal(await ready, "new");
+  assert.equal(seen, 1, "the subscriber follows the restarted watch");
+  assert.equal(runtime.watches[2].channel.closed, false, "the subscriber's watch stays open");
+  runtime.watches[2].send({ name: "s", version: 3, value: "newer" });
+  assert.equal(seen, 2);
+  stop();
+  assert.equal(runtime.watches[2].channel.closed, true);
+});
+
+test("ready joins a running watch that resumed once it sent a frame", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  let stop = state.subscribe(() => {});
+  runtime.watches[0].send({ name: "s", version: 1, value: "old" });
+  stop();
+  stop = state.subscribe(() => {});
+  runtime.watches[1].send({ name: "s", version: 2, value: "new" });
+  assert.equal(await state.ready(), "new");
+  assert.equal(runtime.watches.length, 2);
+  assert.equal(runtime.watches[1].channel.closed, false);
+  stop();
+});
