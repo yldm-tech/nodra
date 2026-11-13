@@ -27,7 +27,7 @@ func NewScope() *Scope {
 func (s *Scope) Context() context.Context { return s.ctx }
 func (s *Scope) Done() <-chan struct{}    { return s.done }
 
-// Observe owns an unsubscribe function. A registration racing with Close is stopped immediately instead of leaking. Already executing source callbacks are not awaited.
+// Observe owns an unsubscribe function. A registration racing with Close is stopped immediately instead of leaking and returns ErrClosed, joined with a PanicError if stop panics. Already executing source callbacks are not awaited.
 func (s *Scope) Observe(stop func()) error {
 	if stop == nil {
 		return nil
@@ -39,7 +39,10 @@ func (s *Scope) Observe(stop func()) error {
 		return nil
 	}
 	s.mu.Unlock()
-	stop()
+	// Contain a panicking stop like Close and a late Defer do, but keep returning ErrClosed itself when stop succeeds.
+	if err := taskBoundary(func() error { stop(); return nil }); err != nil {
+		return errors.Join(ErrClosed, err)
+	}
 	return ErrClosed
 }
 

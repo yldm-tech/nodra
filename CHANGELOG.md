@@ -7,6 +7,12 @@
 * **core:** add `Derived.Done`, closed by `Close`, so a bridge watch of a derived value ends with `ErrClosed` when the derived value closes
 * **bridge:** let the web pages of a MyGo app follow a Store and change it through registered actions: `bridge.Expose` and `bridge.ExposeProjection` serve a source, or the part of it pages may see, through a bound service whose watch sends a frame only when the encoded value changes and coalesces to the latest while a page is slow; `bridge.Handle` registers the actions pages dispatch; `Options.AllowRead` and `Options.AllowDispatch` decide per page. A dependency-free JavaScript client (`bridge/client`, also served from Go as `bridge.Client`) fits React's `useSyncExternalStore`. See docs/bridge.md and examples/web
 * **nativeui:** make a native UI window's Undo and Redo act on a History: `nativeui.UndoShortcuts` registers Cmd+Z and Shift+Cmd+Z (and Ctrl+Y on Windows) while history can act, so with MyGo 0.7.4 on macOS the Edit menu enables its items only then, and a focused text input keeps its own undo; `nativeui.InvalidateHistory` redraws the window when that changes. A separate subpackage, so apps without native UI do not link MyGo's ui package
+* **async:** `ActionMetrics` gains `Superseded`, and superseded LatestWins runs are counted there instead of in `Failed`, matching the `TaskSuperseded` phase; docs/architecture.md describes the classification
+
+### Bug Fixes
+
+* **async:** retry backoff saturates instead of overflowing, so `MaxBackoff` still bounds every delay when `MaxAttempts` is large; canceling, superseding or closing during a backoff delay no longer starts one more work attempt with a canceled context
+* **scope:** a late `Scope.Observe` contains a panicking stop function and returns `ErrClosed` joined with a `PanicError`, like a late `Defer`
 
 ### Bug Fixes
 
@@ -25,6 +31,7 @@
 
 * **core:** state that a derived value with a nil equals function notifies on every accepted source version, and that an equality function is what filters unchanged values
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
+* state in docs/architecture.md and the Go docs that `SubscribeMetrics` callbacks are not covered by `Task.Wait` or `AsyncAction.Close` and can run after unsubscribing, and that `Metrics` read after `Close` is the final aggregate
 
 ## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)
 

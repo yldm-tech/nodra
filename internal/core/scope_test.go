@@ -105,3 +105,25 @@ func TestScopeDrainsPersistenceBeforeClosingStore(t *testing.T) {
 		t.Fatal("scope did not close owned store")
 	}
 }
+
+func TestScopeLateObserveContainsStopPanic(t *testing.T) {
+	scope := NewScope()
+	requireNoError(t, scope.Close(context.Background()))
+	stopped := false
+	if err := scope.Observe(func() { stopped = true }); err != ErrClosed || !stopped {
+		t.Fatalf("late observe = %v, stopped=%v", err, stopped)
+	}
+	var err error
+	func() {
+		defer func() {
+			if value := recover(); value != nil {
+				t.Fatalf("late Observe stop panic escaped: %v", value)
+			}
+		}()
+		err = scope.Observe(func() { panic("unsubscribe") })
+	}()
+	var panicErr *PanicError
+	if !errors.Is(err, ErrClosed) || !errors.As(err, &panicErr) || panicErr.Value != "unsubscribe" {
+		t.Fatalf("late observe panic = %v", err)
+	}
+}

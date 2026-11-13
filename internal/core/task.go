@@ -54,7 +54,7 @@ type AsyncState struct {
 	Revision uint64
 }
 
-// Task is one run of an AsyncAction. Cancel requests cooperative cancellation; Wait waits for work and its completion notifications, independently of the waiter's context. Do not Wait from the task's own work, hooks or synchronous subscribers.
+// Task is one run of an AsyncAction. Cancel requests cooperative cancellation; Wait waits for work and its completion notifications (action hooks and status updates, not SubscribeMetrics callbacks), independently of the waiter's context. Do not Wait from the task's own work, hooks or synchronous subscribers.
 type Task struct {
 	ID             uint64
 	ctx            context.Context
@@ -120,7 +120,7 @@ type AsyncAction[T, I, R any] struct {
 	nextMetricsID    uint64
 }
 
-// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Duration totals include each run once; Retries counts additional work attempts.
+// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Each completed run is counted in exactly one of Succeeded, Failed, Canceled or Superseded, matching the terminal TaskPhase its Task publishes, including TaskFailed when the terminal status update itself fails. Duration totals include each run once; Retried counts additional work attempts.
 type ActionMetrics struct {
 	Accepted    uint64
 	Completed   uint64
@@ -131,6 +131,8 @@ type ActionMetrics struct {
 	QueuePeak   int
 	DurationSum time.Duration
 	DurationMax time.Duration
+	// Superseded counts LatestWins runs replaced by a newer run with the same key, whether they were waiting, working or about to commit. Releases up to 1.2 counted these runs as Failed.
+	Superseded uint64
 }
 
 func (a *AsyncAction[T, I, R]) Metrics() ActionMetrics {
@@ -280,6 +282,7 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 		var err error
 		a.markTime(&task.workStarted)
 		attempts := max(1, a.options.Retry.MaxAttempts)
+		backoff := a.options.Retry.Backoff
 		for attempt := 1; attempt <= attempts; attempt++ {
 			a.mu.Lock()
 			task.attempt = attempt
@@ -299,19 +302,25 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 			if err == nil || attempt == attempts || context.Cause(task.ctx) != nil {
 				break
 			}
-			backoff := a.options.Retry.Backoff
-			for n := 1; n < attempt; n++ {
+			delay := backoff
+			if a.options.Retry.MaxBackoff > 0 {
+				delay = min(delay, a.options.Retry.MaxBackoff)
+			}
+			// Saturate instead of overflowing, so a large MaxAttempts never wraps the delay to zero or a negative value.
+			if backoff > math.MaxInt64/2 {
+				backoff = math.MaxInt64
+			} else {
 				backoff *= 2
 			}
-			if a.options.Retry.MaxBackoff > 0 {
-				backoff = min(backoff, a.options.Retry.MaxBackoff)
-			}
-			timer := time.NewTimer(backoff)
+			timer := time.NewTimer(delay)
 			select {
 			case <-task.ctx.Done():
-				timer.Stop()
-				err = context.Cause(task.ctx)
 			case <-timer.C:
+			}
+			timer.Stop()
+			// Cancellation during the delay ends the run without another work call; the cause is returned below.
+			if context.Cause(task.ctx) != nil {
+				break
 			}
 		}
 		a.markTime(&task.workFinished)
@@ -356,11 +365,13 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	if hookErr := taskBoundary(func() error { a.store.finishAction(event, hooks, err); return nil }); hookErr != nil {
 		err = errors.Join(err, hookErr)
 	}
+	// phase is the terminal phase the Task publishes; the aggregate below counts the run under the same value.
+	phase := taskPhase(err)
 	// Status failures cannot strand a task or prevent Close from releasing it.
 	if statusErr := taskBoundary(func() error {
 		return a.status(task, func(s *AsyncState) {
 			s.Running = false
-			s.Phase = taskPhase(err)
+			s.Phase = phase
 			if err == nil {
 				s.Progress = 1
 			} else {
@@ -369,6 +380,7 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 		})
 	}); statusErr != nil && !errors.Is(statusErr, ErrClosed) {
 		err = errors.Join(err, statusErr)
+		phase = TaskFailed
 		_ = taskBoundary(func() error {
 			return a.status(task, func(s *AsyncState) { s.Running = false; s.Phase = TaskFailed; s.Error = err.Error() })
 		})
@@ -389,11 +401,15 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	}
 	task.err = err
 	a.aggregate.Completed++
-	if err == nil {
+	// Count the phase the Task published, including the TaskFailed fallback after a failed status update, so the aggregate agrees with Task.Status.
+	switch phase {
+	case TaskSucceeded:
 		a.aggregate.Succeeded++
-	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrClosed) {
+	case TaskSuperseded:
+		a.aggregate.Superseded++
+	case TaskCanceled:
 		a.aggregate.Canceled++
-	} else {
+	default:
 		a.aggregate.Failed++
 	}
 	if task.attempt > 1 {
