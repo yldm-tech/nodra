@@ -40,6 +40,10 @@
 * **core:** a `Combine` no longer projects or publishes a pair of input values that no committed state contained when concurrent `Atomic2` or `AtomicGroup` transactions write the same stores: settling one transaction published whatever pair the Combine held at that moment, which could hold half of another transaction, so a projector that relied on an invariant every transaction keeps, such as an index into a slice written in the same transaction, could panic. Combine now checks that both inputs still hold a pair, down to the Stores below derived inputs, before projecting it, and otherwise reads a pair both hold, recomputing derived inputs that have not caught up, so concurrent writers may see fewer intermediate values. The same check covers a write outside a transaction that reaches a Combine through one input before the other
 * **core:** a `Combine` constructed while a transaction was being dispatched could start from, and keep until the dispatch ended, a pair that mixed values from before and after the transaction, because it read its two inputs one after the other and its catch-up could publish one input's new value with the other's old one; it now reads its first pair the same consistent way, including through derived inputs that have not settled the transaction yet
 
+### Performance Improvements
+
+* **core:** the default selector equality, used by `SubscribeSelector`, `SubscribeProjection`, `InvalidateSelector` and the other selector helpers when no `Equals` is given, decides once per subscription whether the selected type can hold an interface value; scalars, pointers and structs or arrays of them now compare with `==` without reflection, which removes about 16 allocations per notification for a three-field struct. Results are unchanged, including pointer identity and NaN, and types that can hold an interface, slices and maps still use the reflective comparison
+
 ### Dependencies
 
 * support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour

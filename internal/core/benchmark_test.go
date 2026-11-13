@@ -158,3 +158,29 @@ func BenchmarkLargeStateSelectors(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkSelectorDefaultEquality measures the default selector equality on a small struct projection whose value does not change, so every notification compares and none calls back.
+func BenchmarkSelectorDefaultEquality(b *testing.B) {
+	type state struct {
+		Title, Status string
+		Count, Edits  int
+	}
+	type projection struct {
+		Title, Status string
+		Count         int
+	}
+	project := func(value state) projection { return projection{value.Title, value.Status, value.Count} }
+	for _, selectors := range []int{1, 20} {
+		b.Run(fmt.Sprintf("selectors=%d", selectors), func(b *testing.B) {
+			store := New(state{Title: "title", Status: "open"})
+			b.Cleanup(func() { _ = store.Close() })
+			for range selectors {
+				SubscribeSelector(store, project, func(projection) {})
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = store.Update(func(value *state) { value.Edits++ })
+			}
+		})
+	}
+}

@@ -1,7 +1,9 @@
 package core
 
 import (
+	"errors"
 	"maps"
+	"math"
 	"reflect"
 	"slices"
 	"testing"
@@ -89,4 +91,77 @@ func TestSelectorCustomEqualityRunsBeforeDefaultComparison(t *testing.T) {
 	}
 	var nilCallback func([]int)
 	SubscribeSelector(New([]int{}), func(v []int) []int { return v }, nilCallback)()
+}
+
+// checkSelectorEqualFor requires the equality chosen for V to agree with the reflective selectorEqual and with want, and to take the == fast path exactly when fast is set.
+func checkSelectorEqualFor[V any](t *testing.T, a, b V, want, fast bool) {
+	t.Helper()
+	if got := holdsInterface(reflect.TypeFor[V]()); reflect.TypeFor[V]().Comparable() && got == fast {
+		t.Errorf("%v: holdsInterface = %v, want fast path %v", reflect.TypeFor[V](), got, fast)
+	}
+	if got, reflective := selectorEqualFor[V]()(a, b), selectorEqual(a, b); got != want || reflective != want {
+		t.Errorf("%v: selectorEqualFor = %v, selectorEqual = %v, want %v", reflect.TypeFor[V](), got, reflective, want)
+	}
+}
+
+func TestSelectorEqualForMatchesReflectiveEquality(t *testing.T) {
+	type projection struct {
+		Title, Status string
+		Count         int
+	}
+	type withInterface struct{ V any }
+	type withPointerToInterface struct{ V *any }
+	type nested struct {
+		Inner [2]struct{ Err error }
+	}
+	first, second := new(int), new(int)
+	var shared any = []int{1}
+	nan := math.NaN()
+	checkSelectorEqualFor(t, 1, 1, true, true)
+	checkSelectorEqualFor(t, "a", "b", false, true)
+	checkSelectorEqualFor(t, nan, nan, false, true)
+	checkSelectorEqualFor(t, projection{"a", "b", 1}, projection{"a", "b", 1}, true, true)
+	checkSelectorEqualFor(t, projection{"a", "b", 1}, projection{"a", "b", 2}, false, true)
+	checkSelectorEqualFor(t, [2]float64{nan, 1}, [2]float64{nan, 1}, false, true)
+	checkSelectorEqualFor(t, first, first, true, true)
+	checkSelectorEqualFor(t, first, second, false, true)
+	checkSelectorEqualFor(t, withPointerToInterface{&shared}, withPointerToInterface{&shared}, true, true)
+	checkSelectorEqualFor[any](t, nil, nil, true, false)
+	checkSelectorEqualFor[any](t, []int{1}, []int{1}, true, false)
+	checkSelectorEqualFor[any](t, 1, int64(1), false, false)
+	checkSelectorEqualFor[any](t, nan, nan, false, false)
+	checkSelectorEqualFor(t, withInterface{[]int{1}}, withInterface{[]int{1}}, true, false)
+	checkSelectorEqualFor(t, withInterface{map[string]int{"a": 1}}, withInterface{map[string]int{"a": 2}}, false, false)
+	checkSelectorEqualFor(t, [1]any{[]int{1}}, [1]any{[]int{2}}, false, false)
+	checkSelectorEqualFor(t, nested{}, nested{}, true, false)
+	checkSelectorEqualFor(t, errors.ErrUnsupported, errors.ErrUnsupported, true, false)
+	checkSelectorEqualFor(t, []int{1}, []int{1}, true, false)
+	checkSelectorEqualFor(t, map[string]int{"a": 1}, map[string]int{"a": 2}, false, false)
+}
+
+func TestSelectorDefaultEqualityAllocatesNothingForPlainComparableValues(t *testing.T) {
+	type state struct {
+		Title, Status string
+		Count, Edits  int
+	}
+	type projection struct {
+		Title, Status string
+		Count         int
+	}
+	project := func(value state) projection { return projection{value.Title, value.Status, value.Count} }
+	allocsPerUpdate := func(options SelectorOptions[projection]) float64 {
+		store := New(state{Title: "title", Status: "open"})
+		defer func() { _ = store.Close() }()
+		for range 10 {
+			defer SubscribeSelectorWith(store, project, func(projection, projection) {}, options)()
+		}
+		return testing.AllocsPerRun(100, func() {
+			requireNoError(t, store.Update(func(value *state) { value.Edits++ }))
+		})
+	}
+	// The selectors see an unchanged projection, so the only difference between the two runs is the equality function.
+	explicit := allocsPerUpdate(SelectorOptions[projection]{Equals: func(a, b projection) bool { return a == b }})
+	if def := allocsPerUpdate(SelectorOptions[projection]{}); def > explicit {
+		t.Fatalf("default equality allocates %.0f per update across 10 selectors, want %.0f like an explicit ==", def, explicit)
+	}
 }
