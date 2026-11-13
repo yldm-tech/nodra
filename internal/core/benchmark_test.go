@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/egoist/mygo"
 )
 
 func BenchmarkActionScheduling(b *testing.B) {
@@ -184,3 +188,60 @@ func BenchmarkSelectorDefaultEquality(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkChangeSignalClones counts the clones of a large NewWithClone state per Update with one helper subscribed that uses a publication only as a change signal. AutoSave and AutoSaveWithErrors save synchronously, and each save takes one snapshot of its own.
+func BenchmarkChangeSignalClones(b *testing.B) {
+	for _, helper := range []struct {
+		name      string
+		subscribe func(*testing.B, *Store[[]int])
+	}{
+		{"none", func(*testing.B, *Store[[]int]) {}},
+		{"InvalidateTarget", func(b *testing.B, store *Store[[]int]) {
+			b.Cleanup(InvalidateTarget(store, new(invalidationTargetFake)))
+		}},
+		{"Invalidate", func(b *testing.B, store *Store[[]int]) {
+			b.Cleanup(Invalidate(store, &mygo.Window{}))
+		}},
+		{"AutoSave", func(b *testing.B, store *Store[[]int]) {
+			b.Cleanup(NewPersistence(store, discardStorage{}, discardCodec{}).AutoSave(context.Background()))
+		}},
+		{"AutoSaveWithErrors", func(b *testing.B, store *Store[[]int]) {
+			_, stop := NewPersistence(store, discardStorage{}, discardCodec{}).AutoSaveWithErrors(context.Background())
+			b.Cleanup(stop)
+		}},
+		{"AutoSaveAsync", func(b *testing.B, store *Store[[]int]) {
+			async, err := NewPersistence(store, discardStorage{}, discardCodec{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Hour})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(func() { _ = async.Close(context.Background()) })
+		}},
+	} {
+		b.Run(helper.name, func(b *testing.B) {
+			var clones atomic.Int64
+			store := NewWithClone(make([]int, 10000), func(value []int) []int {
+				clones.Add(1)
+				return slices.Clone(value)
+			})
+			b.Cleanup(func() { _ = store.Close() })
+			helper.subscribe(b, store)
+			clones.Store(0)
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = store.Update(func(value *[]int) { (*value)[0]++ })
+			}
+			b.ReportMetric(float64(clones.Load())/float64(b.N), "clones/op")
+		})
+	}
+}
+
+// discardStorage and discardCodec keep persistence I/O and encoding out of the clone benchmarks.
+type discardStorage struct{}
+
+func (discardStorage) Load(context.Context) ([]byte, error) { return nil, nil }
+func (discardStorage) Save(context.Context, []byte) error   { return nil }
+
+type discardCodec struct{}
+
+func (discardCodec) Encode([]int) ([]byte, error) { return nil, nil }
+func (discardCodec) Decode([]byte) ([]int, error) { return nil, nil }

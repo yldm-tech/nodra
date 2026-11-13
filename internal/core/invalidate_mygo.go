@@ -28,7 +28,7 @@ func Invalidate[T any](source Observable[T], window *mygo.Window) (stop func()) 
 		return func() {}
 	}
 	return bindInvalidation(window, func(redraw func()) func() {
-		return source.SubscribeSnapshot(func(Snapshot[T]) { redraw() })
+		return subscribeChangeSignal(source, redraw)
 	})
 }
 

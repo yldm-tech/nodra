@@ -202,7 +202,7 @@ func (p *Persistence[T]) AutoSave(ctx context.Context) func() {
 	if p == nil || p.store == nil {
 		return func() {}
 	}
-	return p.store.Subscribe(func(Snapshot[T]) { _ = p.Save(ctx) })
+	return p.store.subscribeVersions(func(uint64) { _ = p.Save(ctx) })
 }
 
 // AutoSaveWithErrors subscribes to updates and reports persistence failures on a buffered channel. The channel closes when ctx is canceled or stop is called. Stop releases the background watcher but does not wait for in-flight saves.
@@ -231,7 +231,7 @@ func (p *Persistence[T]) AutoSaveWithErrors(ctx context.Context) (<-chan error, 
 			close(stopped)
 		})
 	}
-	unsubscribe = p.store.Subscribe(func(Snapshot[T]) {
+	unsubscribe = p.store.subscribeVersions(func(uint64) {
 		if err := p.Save(ctx); err != nil {
 			errMu.Lock()
 			defer errMu.Unlock()

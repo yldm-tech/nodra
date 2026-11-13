@@ -15,7 +15,26 @@ func InvalidateTarget[T any](source Observable[T], target InvalidationTarget) fu
 	if !validObservable(source) || !validInvalidationTarget(target) {
 		return func() {}
 	}
-	return source.SubscribeSnapshot(func(Snapshot[T]) { target.Invalidate() })
+	return subscribeChangeSignal(source, func() { target.Invalidate() })
+}
+
+// subscribeChangeSignal calls fn after each publication of source for helpers that ignore the published value. A Store or ReadOnly source is observed through Store.subscribeVersions, which skips the per-listener clone; derived values and application Observables, including types that embed a Store, keep their own SubscribeSnapshot.
+func subscribeChangeSignal[T any](source Observable[T], fn func()) func() {
+	var store *Store[T]
+	switch source := source.(type) {
+	case *Store[T]:
+		store = source
+	case ReadOnly[T]:
+		store = source.store
+	case *ReadOnly[T]:
+		if source != nil {
+			store = source.store
+		}
+	}
+	if store == nil {
+		return source.SubscribeSnapshot(func(Snapshot[T]) { fn() })
+	}
+	return store.subscribeVersions(func(uint64) { fn() })
 }
 
 func validInvalidationTarget(target InvalidationTarget) bool {
