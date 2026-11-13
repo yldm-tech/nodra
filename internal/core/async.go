@@ -12,7 +12,7 @@ type AsyncOptions struct {
 	Debounce time.Duration
 }
 
-// AsyncPersistence owns one worker and a bounded error stream. It coalesces updates without blocking writer goroutines on encoding or storage. Failed writes remain pending; the next update or Flush retries them without spinning. Values must be immutable or the store must use NewWithClone.
+// AsyncPersistence owns one worker and a bounded error stream. It coalesces updates without blocking writer goroutines on encoding or storage. Failed writes remain pending; the next update or Flush retries them without spinning. A panic in PersistenceOptions.Validate, Codec.Encode or Storage.Save during a background write is reported as a PanicError write failure. Values must be immutable or the store must use NewWithClone.
 type AsyncPersistence[T any] struct {
 	p           *Persistence[T]
 	ctx         context.Context
@@ -247,7 +247,12 @@ func (a *AsyncPersistence[T]) run() {
 				break
 			}
 			a.publishStatus()
-			version, err := a.p.save(a.ctx)
+			// Validate, Encode and Storage.Save are application code running on this library-owned goroutine. A panic becomes a PanicError write failure, so the state stays pending for a retry instead of the process crashing; save's deferred unlock has already released the save lock.
+			var version uint64
+			err := taskBoundary(func() (err error) {
+				version, err = a.p.save(a.ctx)
+				return err
+			})
 			a.mu.Lock()
 			a.saving = false
 			a.revision++

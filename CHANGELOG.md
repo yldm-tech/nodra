@@ -28,6 +28,7 @@
 * **persistence:** a journaled FileStorage no longer fails every Load, WithConflictDetection and CheckedFileStorage call after a crash or failed removal during journal cleanup: cleanup now removes the commit marker before the journal, and recovery discards a commit marker that has no matching journal instead of returning "read committed journal" or "committed journal checksum mismatch"
 * **persistence:** `FileStorage{Durable: true}` no longer fails every Save on Windows with an access-denied directory sync after the primary was already replaced, which also skipped the backup; Windows has no directory fsync, so the sync is skipped there, as the journal path already did
 * **persistence:** `LoadWithRecovery` now falls back to the backup when the primary fails to decode with an error that wraps `ErrInvalidPersistence`, such as a damaged `VersionedJSONCodec` envelope; it used to return that load error as if the configuration were invalid and never tried the backup
+* **persistence:** the `AutoSaveAsync` worker now turns a panic from `PersistenceOptions.Validate`, `Codec.Encode` or `Storage.Save` into a `PanicError` write failure, reported through Errors, Flush and Close with the state left pending, instead of crashing the process; synchronous Save and AutoSave still propagate panics to their caller
 
 ### Dependencies
 

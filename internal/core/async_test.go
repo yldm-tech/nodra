@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -357,6 +358,86 @@ func TestAsyncRejectsInvalidConfiguration(t *testing.T) {
 			if writer != nil || !errors.Is(err, test.want) {
 				t.Fatalf("writer, error = %v, %v", writer, err)
 			}
+		})
+	}
+}
+
+type panickingStorage struct {
+	asyncStorage
+	panicking atomic.Bool
+}
+
+func (s *panickingStorage) Save(ctx context.Context, data []byte) error {
+	if s.panicking.Load() {
+		panic("storage bug")
+	}
+	return s.asyncStorage.Save(ctx, data)
+}
+
+type panickingCodec struct {
+	JSONCodec[int]
+	panicking *atomic.Bool
+}
+
+func (c panickingCodec) Encode(value int) ([]byte, error) {
+	if c.panicking.Load() {
+		panic("codec bug")
+	}
+	return c.JSONCodec.Encode(value)
+}
+
+// The write-behind worker runs Storage.Save, Codec.Encode and Validate on a goroutine the library owns, so a panic there must become a PanicError write failure instead of killing the process.
+func TestAsyncPersistenceContainsWorkerPanics(t *testing.T) {
+	for _, boundary := range []string{"storage", "codec", "validate"} {
+		t.Run(boundary, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				storage := &panickingStorage{}
+				panicking := &storage.panicking
+				var codec Codec[int] = JSONCodec[int]{}
+				var options PersistenceOptions[int]
+				want := boundary + " bug"
+				switch boundary {
+				case "codec":
+					panicking = &atomic.Bool{}
+					codec = panickingCodec{panicking: panicking}
+				case "validate":
+					panicking = &atomic.Bool{}
+					options.Validate = func(int) error {
+						if panicking.Load() {
+							panic("validate bug")
+						}
+						return nil
+					}
+				}
+				panicking.Store(true)
+				store := New(5)
+				writer, err := NewPersistenceWithOptions(store, storage, codec, options).AutoSaveAsync(context.Background(), AsyncOptions{})
+				requireNoError(t, err)
+				var panicErr *PanicError
+				if err := writer.Flush(context.Background()); !errors.As(err, &panicErr) || panicErr.Value != want {
+					t.Fatalf("flush error = %v, want PanicError(%q)", err, want)
+				}
+				// Let a retry forced by the failed Flush settle before inspecting the worker.
+				synctest.Wait()
+				select {
+				case err := <-writer.Errors():
+					if !errors.As(err, &panicErr) || panicErr.Value != want {
+						t.Fatalf("reported error = %v", err)
+					}
+				default:
+					t.Fatal("panic was not reported on Errors")
+				}
+				if status := writer.Status().Get(); !status.Pending || status.Saving || status.Closed || status.Error == "" {
+					t.Fatalf("status after panic = %+v", status)
+				}
+				panicking.Store(false)
+				requireNoError(t, writer.Flush(context.Background()))
+				requireNoError(t, store.Set(6))
+				requireNoError(t, writer.Close(context.Background()))
+				if values, _ := storage.result(); !reflect.DeepEqual(values, []int{5, 6}) {
+					t.Fatalf("writes after recovery = %v", values)
+				}
+			})
 		})
 	}
 }
