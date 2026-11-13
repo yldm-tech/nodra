@@ -7,6 +7,10 @@
 * **bridge:** let the web pages of a MyGo app follow a Store and change it through registered actions: `bridge.Expose` and `bridge.ExposeProjection` serve a source, or the part of it pages may see, through a bound service whose watch sends a frame only when the encoded value changes and coalesces to the latest while a page is slow; `bridge.Handle` registers the actions pages dispatch; `Options.AllowRead` and `Options.AllowDispatch` decide per page. A dependency-free JavaScript client (`bridge/client`, also served from Go as `bridge.Client`) fits React's `useSyncExternalStore`. See docs/bridge.md and examples/web
 * **nativeui:** make a native UI window's Undo and Redo act on a History: `nativeui.UndoShortcuts` registers Cmd+Z and Shift+Cmd+Z (and Ctrl+Y on Windows) while history can act, so with MyGo 0.7.4 on macOS the Edit menu enables its items only then, and a focused text input keeps its own undo; `nativeui.InvalidateHistory` redraws the window when that changes. A separate subpackage, so apps without native UI do not link MyGo's ui package
 
+### Bug Fixes
+
+* **core:** an update callback that reads another store no longer deadlocks every store when an `Atomic2` or `AtomicGroup` starts meanwhile; store reads no longer take the global transaction gate, and the docs state that update callbacks may read other stores but must not write to any store
+
 ### Dependencies
 
 * support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour

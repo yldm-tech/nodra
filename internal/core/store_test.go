@@ -3,8 +3,10 @@ package core
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
+	"time"
 )
 
 type counterState struct {
@@ -117,5 +119,55 @@ func TestStoreSupportsConcurrentUpdates(t *testing.T) {
 	wg.Wait()
 	if store.Snapshot().Value != workers*updates {
 		t.Fatalf("value = %d", store.Snapshot().Value)
+	}
+}
+
+func TestUpdateCallbackReadsAnotherStoreWhileATransactionWaits(t *testing.T) {
+	a, b := New(0), New(41)
+	c, d := New(0), New(0)
+	entered, release := make(chan struct{}), make(chan struct{})
+	updated := make(chan error, 1)
+	go func() {
+		updated <- a.Update(func(v *int) {
+			close(entered)
+			<-release
+			*v = b.Get() + int(b.Version()) + 1
+		})
+	}()
+	<-entered
+	committed := make(chan error, 1)
+	go func() { committed <- Atomic2(c, d, func(x, y *int) error { *x, *y = 1, 2; return nil }) }()
+	// A writer queued on the transaction gate makes TryRLock fail while a.Update still holds its read lock.
+	for waiting := false; !waiting; {
+		select {
+		case err := <-committed:
+			t.Fatalf("Atomic2 finished while an update held the gate: %v", err)
+		default:
+		}
+		if storeTransactionMu.TryRLock() {
+			storeTransactionMu.RUnlock()
+			runtime.Gosched()
+			continue
+		}
+		waiting = true
+	}
+	close(release)
+	select {
+	case err := <-updated:
+		requireNoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("an update reading another store deadlocked against a waiting Atomic2")
+	}
+	select {
+	case err := <-committed:
+		requireNoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Atomic2 did not finish after the update")
+	}
+	if got := a.Get(); got != 42 {
+		t.Fatalf("a = %d, want 42", got)
+	}
+	if c.Get() != 1 || d.Get() != 2 {
+		t.Fatalf("transaction values = %d, %d", c.Get(), d.Get())
 	}
 }

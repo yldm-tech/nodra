@@ -13,6 +13,7 @@ import (
 
 var ErrClosed = errors.New("nodra: store is closed")
 
+// storeTransactionMu orders writers: updates hold it for reading and Atomic2 and AtomicGroup for writing, so a transaction never interleaves with an update in progress. Readers do not take it; the store locks a transaction holds from preparation to commit already keep a half-committed transaction from being read.
 var storeTransactionMu sync.RWMutex
 var nextTransactionID atomic.Uint64
 
@@ -80,8 +81,6 @@ func (s *Store[T]) copy(value T) T {
 	return value
 }
 func (s *Store[T]) Snapshot() Snapshot[T] {
-	storeTransactionMu.RLock()
-	defer storeTransactionMu.RUnlock()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return Snapshot[T]{Value: s.copy(s.value), Version: s.version, TransactionID: s.transactionID}
@@ -89,8 +88,6 @@ func (s *Store[T]) Snapshot() Snapshot[T] {
 func (s *Store[T]) Get() T   { return s.Snapshot().Value }
 func (s *Store[T]) State() T { return s.Get() }
 func (s *Store[T]) Version() uint64 {
-	storeTransactionMu.RLock()
-	defer storeTransactionMu.RUnlock()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.version
@@ -99,6 +96,8 @@ func (s *Store[T]) Version() uint64 {
 func (s *Store[T]) Set(value T) error {
 	return s.updateNamed("", MutationDirect, func(v *T) error { *v = value; return nil })
 }
+
+// Update applies fn to a private candidate and publishes the result. fn runs while the store is locked, as do the callbacks of UpdateErr, Transaction, Do and Field updates: it may read other stores, as long as no update of those stores reads this one, but it must not write to any store or call methods of this one.
 func (s *Store[T]) Update(fn func(*T)) error {
 	return s.UpdateErr(func(v *T) error {
 		if fn != nil {
@@ -107,6 +106,8 @@ func (s *Store[T]) Update(fn func(*T)) error {
 		return nil
 	})
 }
+
+// UpdateErr is Update with a callback that can abort: an error leaves the store unchanged and is returned. The callback follows Update's rules.
 func (s *Store[T]) UpdateErr(fn func(*T) error) error   { return s.updateNamed("", MutationPatch, fn) }
 func (s *Store[T]) Transaction(fn func(*T) error) error { return s.UpdateErr(fn) }
 func (s *Store[T]) Reset() error {
