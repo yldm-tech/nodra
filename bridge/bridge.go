@@ -152,7 +152,7 @@ func ExposeProjection[T, V any](b *Bridge, name string, source nodra.Observable[
 			return snapshot.Version, raw, nil
 		},
 		subscribe: func(changed func()) func() {
-			return source.SubscribeSnapshot(func(nodra.Snapshot[T]) { changed() })
+			return subscribeChangeSignal(source, changed)
 		},
 		stopped: make(chan struct{}),
 	}
@@ -347,4 +347,20 @@ func isNil(value any) bool {
 	default:
 		return false
 	}
+}
+
+// subscribeChangeSignal calls changed after each publication of source; a watch uses a publication only as a signal and reads the state itself. A Store or ReadOnly source is observed through SubscribeProjectionWith with an empty projection that never compares equal, which borrows the snapshot, so a NewWithClone store does not clone its whole state for every open watch on each update. Out-of-order notifications are still dropped. Derived values and application Observables, including types that embed a Store and may define their own SubscribeSnapshot, keep their SubscribeSnapshot.
+func subscribeChangeSignal[T any](source nodra.Observable[T], changed func()) func() {
+	var reader nodra.Reader[T]
+	switch source := source.(type) {
+	case *nodra.Store[T]:
+		reader = source
+	case nodra.ReadOnly[T]:
+		reader = source
+	case *nodra.ReadOnly[T]:
+		reader = source
+	default:
+		return source.SubscribeSnapshot(func(nodra.Snapshot[T]) { changed() })
+	}
+	return nodra.SubscribeProjectionWith(reader, func(T) struct{} { return struct{}{} }, func(struct{}, struct{}) { changed() }, nodra.SelectorOptions[struct{}]{Equals: func(struct{}, struct{}) bool { return false }})
 }
