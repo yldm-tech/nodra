@@ -118,3 +118,36 @@ func TestFileStorageReadOnlyPrimaryStaysReadOnlyWhenReplaceFailsWindows(t *testi
 		t.Fatalf("primary = %q, %v; want the previous state", got, err)
 	}
 }
+
+func TestFileStorageBackupReplacementRetriesWithinSaveContextWindows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	storage := FileStorage{Path: path, Backup: true}
+	if err := storage.Save(context.Background(), []byte("one")); err != nil {
+		t.Fatal(err)
+	}
+	// Only the backup is held, so the primary replacement succeeds at once and the retry that follows belongs to the .bak replacement, which has its own retry limit; the Save's context is what ends it.
+	holdOpen(t, path+".bak")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var retried []string
+	setReplaceRetryHook(t, func(err error) {
+		var linkErr *os.LinkError
+		if errors.As(err, &linkErr) {
+			retried = append(retried, filepath.Base(linkErr.New))
+		}
+		cancel()
+	})
+	err := storage.Save(ctx, []byte("two"))
+	if !errors.Is(err, context.Canceled) || !isReplaceContention(err) {
+		t.Fatalf("Save = %v, want context.Canceled wrapped with the contention error", err)
+	}
+	if len(retried) != 1 || retried[0] != "state.json.bak" {
+		t.Fatalf("retried replacements = %v, want one retry of state.json.bak", retried)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "two" {
+		t.Fatalf("primary = %q, %v; want the new state", got, err)
+	}
+	if got, err := os.ReadFile(path + ".bak"); err != nil || string(got) != "one" {
+		t.Fatalf("backup = %q, %v; want the previous state", got, err)
+	}
+}

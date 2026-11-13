@@ -197,7 +197,7 @@ func (p *Persistence[T]) save(ctx context.Context) (uint64, error) {
 	return snapshot.Version, p.storage.Save(ctx, data)
 }
 
-// AutoSave subscribes to updates and saves synchronously after each update. The returned function stops autosaving. Use Batch to coalesce writes.
+// AutoSave subscribes to updates and saves synchronously after each update. The returned function stops autosaving. Use Batch to coalesce writes. The save runs on the goroutine that updated the store, so a slow Storage.Save blocks that update; on Windows a FileStorage Save retries while another handle holds a file it replaces, about 2 s per replaced file, and AutoSaveAsync keeps that wait off the updating goroutine.
 func (p *Persistence[T]) AutoSave(ctx context.Context) func() {
 	if p == nil || p.store == nil {
 		return func() {}
@@ -205,7 +205,7 @@ func (p *Persistence[T]) AutoSave(ctx context.Context) func() {
 	return p.store.subscribeVersions(func(uint64) { _ = p.Save(ctx) })
 }
 
-// AutoSaveWithErrors subscribes to updates and reports persistence failures on a buffered channel. The channel closes when ctx is canceled or stop is called. Stop releases the background watcher but does not wait for in-flight saves.
+// AutoSaveWithErrors subscribes to updates and reports persistence failures on a buffered channel. The channel closes when ctx is canceled or stop is called. Stop releases the background watcher but does not wait for in-flight saves. Like AutoSave it saves on the goroutine that updated the store, which can block that update for as long as a Save takes.
 func (p *Persistence[T]) AutoSaveWithErrors(ctx context.Context) (<-chan error, func()) {
 	if p == nil || p.store == nil {
 		ch := make(chan error)
