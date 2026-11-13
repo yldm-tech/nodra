@@ -94,7 +94,7 @@ func selectorEqual[V any](previous, next V) bool {
 	return reflect.DeepEqual(previous, next)
 }
 
-// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes a newer version. With an equals function it notifies listeners only when the selected value changes; with a nil equals every accepted source version replaces the value and notifies, so pass an equality function when the derived value filters changes, for example for Invalidate or the bridge. Within an Atomic2 or AtomicGroup, a derived value settles after every source that is a Store, a ReadOnly view or another derived value; an application Observable counts as a source of height zero, even when it forwards a derived value. Done is closed by Close; closing a source does not close the derived value, which keeps its last value. Reference values and listener arguments remain read-only.
+// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes a newer version; a Combine that reads it before it has caught up with its source may also call its selector, without changing the derived value. With an equals function it notifies listeners only when the selected value changes; with a nil equals every accepted source version replaces the value and notifies, so pass an equality function when the derived value filters changes, for example for Invalidate or the bridge. Within an Atomic2 or AtomicGroup, a derived value settles after every source that is a Store, a ReadOnly view or another derived value; an application Observable counts as a source of height zero, even when it forwards a derived value. Done is closed by Close; closing a source does not close the derived value, which keeps its last value. Reference values and listener arguments remain read-only.
 type Derived[T any, V any] struct {
 	source            *Store[T]
 	selector          func(T) V
@@ -110,6 +110,10 @@ type Derived[T any, V any] struct {
 	closed            bool
 	done              chan struct{}
 	height            int
+
+	// sourceFresh and readSource come from the source's sourceLinks.
+	sourceFresh func(uint64) bool
+	readSource  func() (Snapshot[T], bool, func() bool)
 }
 
 // closedDerived is the result of an invalid construction: closed from the start, with Done already closed.
@@ -125,7 +129,7 @@ func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(
 	if !validObservable(source) {
 		return closedDerived[T, V]()
 	}
-	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1)
+	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1, linksOf(source))
 }
 
 // DeriveProjection memoizes an owned projection without whole-source clones. It follows SubscribeProjection's ownership contract; returned reference values and listener arguments are read-only.
@@ -134,11 +138,15 @@ func DeriveProjection[T any, V any](source Reader[T], project func(T) V, equals 
 	if store == nil {
 		return closedDerived[T, V]()
 	}
-	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals, 1)
+	links := sourceLinks[T]{fresh: store.fresh, read: func() (Snapshot[T], bool, func() bool) {
+		snapshot := store.borrowedSnapshot()
+		return snapshot, true, func() bool { return store.fresh(snapshot.Version) }
+	}}
+	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals, 1, links)
 }
 
 // derive builds a derived value at height, which is one more than the height of its highest source.
-func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool, height int) *Derived[T, V] {
+func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool, height int, links sourceLinks[T]) *Derived[T, V] {
 	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V)), done: make(chan struct{}), height: height}
 	if selector == nil {
 		d.closed = true
@@ -149,6 +157,7 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 	d.value = selector(initial.Value)
 	d.version = initial.Version
 	d.transactionID = initial.TransactionID
+	d.sourceFresh, d.readSource = links.fresh, links.read
 	var pendingMu sync.Mutex
 	// pendingTransactions holds the newest snapshot of each transaction whose settlement is queued.
 	pendingTransactions := make(map[uint64]Snapshot[T])
