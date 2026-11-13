@@ -462,6 +462,7 @@ func SubscribeSelector[T any, S any](store Observable[T], selector func(T) S, fn
 	return SubscribeSelectorWith(store, selector, func(current, _ S) { fn(current) }, SelectorOptions[S]{})
 }
 
+// Watch returns a channel of the snapshots the store publishes after the call; it does not send the current one. The channel holds buffer snapshots (at least 1); when it is full, the oldest is dropped to keep the newest, and a snapshot older than one already delivered is never sent. The channel closes when ctx ends or the store closes. When the store closes, the channel first receives the store's final snapshot if it is newer than the last one delivered, such as a write that committed before Close but was still notifying, or the value of a batch closed before it published, so a consumer ends with the store's final value.
 func (s *Store[T]) Watch(ctx context.Context, buffer int) <-chan Snapshot[T] {
 	if buffer < 1 {
 		buffer = 1
@@ -469,37 +470,49 @@ func (s *Store[T]) Watch(ctx context.Context, buffer int) <-chan Snapshot[T] {
 	ch := make(chan Snapshot[T], buffer)
 	var mu sync.Mutex
 	closed := false
-	var version uint64
-	hasVersion := false
-	unsubscribe := s.Subscribe(func(snapshot Snapshot[T]) {
-		mu.Lock()
-		defer mu.Unlock()
-		if closed || (hasVersion && snapshot.Version <= version) {
+	// version starts at the version current before subscribing: the listener only receives later publications, and the final snapshot is sent on Close only when it is newer.
+	version := s.Version()
+	// push sends snapshot unless an equal or newer version was delivered; it must run with mu held.
+	push := func(snapshot Snapshot[T]) {
+		if closed || snapshot.Version <= version {
 			return
 		}
-		version, hasVersion = snapshot.Version, true
+		version = snapshot.Version
 		select {
 		case ch <- snapshot:
 		default:
 			select {
 			case <-ch:
 			default:
-				{
-				}
 			}
 			ch <- snapshot
 		}
+	}
+	unsubscribe := s.Subscribe(func(snapshot Snapshot[T]) {
+		mu.Lock()
+		defer mu.Unlock()
+		push(snapshot)
 	})
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	go func() {
+		storeClosed := false
 		select {
 		case <-ctx.Done():
 		case <-s.done:
+			storeClosed = true
 		}
 		unsubscribe()
+		var final Snapshot[T]
+		if storeClosed {
+			// A write that committed before Close notifies after releasing the store lock, so its notification may arrive after the channel would close; the closed store's snapshot is final and carries it.
+			final = s.Snapshot()
+		}
 		mu.Lock()
+		if storeClosed {
+			push(final)
+		}
 		if !closed {
 			closed = true
 			close(ch)
