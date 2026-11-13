@@ -516,7 +516,12 @@ if err := mygo.App.Run(); err != nil {
 			['bridge.Client', 'var Client fs.FS', 'JavaScript 客户端 nodra.js 及其类型 nodra.d.ts，供从 Go 提供页面的应用使用；使用打包工具的应用把这两个文件复制到前端。', 'The JavaScript client nodra.js and its types nodra.d.ts, for apps that serve their pages from Go; apps with a bundler copy the two files into their frontend.'],
 		],
 		file: 'bridge.go',
-		code: `b := bridge.New(bridge.Options{})
+		code: `// PageState is what pages see. Values are encoded with encoding/json, so the tag makes the page read state.count; without it the key is Count.
+type PageState struct {
+	Count int \`json:"count"\`
+}
+
+b := bridge.New(bridge.Options{})
 defer b.Close()
 
 // Pages see the count, not the token.
