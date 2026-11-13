@@ -27,7 +27,8 @@ func readText(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(data)
+	// Git on Windows may check text files out with CRLF line endings; the tests compare and search text by "\n".
+	return strings.ReplaceAll(string(data), "\r\n", "\n")
 }
 
 // rootFunctions returns the doc comment of every exported function declared in api.go, keyed by name.
