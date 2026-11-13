@@ -185,3 +185,58 @@ func TestStoppingAnExposureDropsAHeldBackChange(t *testing.T) {
 		})
 	}
 }
+
+// TestStoppingAnExposureDuringASendSendsNothingMore covers a watch without an interval: when the source changes and the state goes away while a send blocks, Watch finds the change, the stop and, when the source closes too, the closed source ready at once once the send returns, and must end without sending the change. Go picks between ready select cases at random, so the test repeats.
+func TestStoppingAnExposureDuringASendSendsNothingMore(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		closeSource bool
+		end         func(stop func(), b *bridge.Bridge)
+	}{
+		{"exposure stopped", false, func(stop func(), _ *bridge.Bridge) { stop() }},
+		{"bridge closed", false, func(_ func(), b *bridge.Bridge) { b.Close() }},
+		{"exposure stopped and source closed", true, func(stop func(), _ *bridge.Bridge) { stop() }},
+		{"bridge closed and source closed", true, func(_ func(), b *bridge.Bridge) { b.Close() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for range 64 {
+				synctest.Test(t, func(t *testing.T) {
+					store := nodra.New(state{})
+					defer func() { _ = store.Close() }()
+					b := bridge.New(bridge.Options{})
+					defer b.Close()
+					stop, err := bridge.ExposeProjection(b, "counter", store, project)
+					if err != nil {
+						t.Fatal(err)
+					}
+					f := newFrames()
+					release := make(chan struct{})
+					done := make(chan error, 1)
+					go func() {
+						done <- b.Watch(context.Background(), "counter", 0, func(frame bridge.Frame) error {
+							if decode[pageState](t, frame).Count == 1 {
+								<-release
+							}
+							return f.send(frame)
+						})
+					}()
+					synctest.Wait()
+					increment(t, store)
+					synctest.Wait() // the send of count 1 blocks
+					increment(t, store)
+					tc.end(stop, b)
+					if tc.closeSource {
+						_ = store.Close()
+					}
+					close(release)
+					if err := <-done; !errors.Is(err, bridge.ErrClosed) {
+						t.Fatalf("watch ended with %v, want ErrClosed", err)
+					}
+					if got := counts(t, f); len(got) != 2 || got[1] != 1 {
+						t.Fatalf("frames %v, want [0 1]: nothing after the state went away", got)
+					}
+				})
+			}
+		})
+	}
+}
