@@ -19,16 +19,32 @@ Nodra es una biblioteca de estado reactivo y segura frente a concurrencia para a
 go get github.com/yldm-tech/nodra@latest
 ```
 
-El paquete principal es `github.com/yldm-tech/nodra` y el inspector local opcional es `github.com/yldm-tech/nodra/devtools`.
+El paquete principal es `github.com/yldm-tech/nodra`. El inspector opcional es `github.com/yldm-tech/nodra/devtools`, el puente opcional hacia páginas web es `github.com/yldm-tech/nodra/bridge` y la integración con el menú Edit para la UI nativa es `github.com/yldm-tech/nodra/nativeui`.
 
 ## Inicio rápido
 
 ```go
-store := nodra.New(State{})
-defer store.Close()
-stop := store.Subscribe(func(s nodra.Snapshot[State]) { fmt.Println(s.Value) })
-defer stop()
-_ = store.Update(func(s *State) { s.Count++ })
+package main
+
+import (
+	"fmt"
+
+	"github.com/yldm-tech/nodra"
+)
+
+type State struct{ Count int }
+
+func main() {
+	store := nodra.New(State{})
+	defer store.Close()
+
+	stop := store.Subscribe(func(s nodra.Snapshot[State]) {
+		fmt.Println(s.Value.Count)
+	})
+	defer stop()
+
+	_ = store.Update(func(s *State) { s.Count++ })
+}
 ```
 
 ## Capacidades principales
@@ -39,18 +55,20 @@ _ = store.Update(func(s *State) { s.Count++ })
 - Persistencia JSON, migraciones, cifrado, copias de seguridad, diario y detección de conflictos.
 - Acciones asíncronas con debounce, cancelación, cola, progreso, reintentos y métricas.
 - Gestión de propiedad y orden de cierre mediante `Scope`.
-- Integración de invalidación con MyGo e inspector DevTools local autenticado.
+- Helpers opcionales de invalidación para MyGo e inspector DevTools local autenticado.
 - Un puente para que las páginas web de una app MyGo sigan un Store y lo cambien mediante acciones registradas.
 - Deshacer y Rehacer de los atajos y del menú Edit de la ventana sobre un History, para la UI nativa de MyGo.
 
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int { return s.Count })
+stop := nodra.InvalidateSelector(store, window, func(s State) int {
+	return s.Count
+})
 defer stop()
 ```
 
-La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para un ejemplo mínimo.
+La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para una ventana nativa mínima.
 
 ```go
 history := nodra.Track(store, 100)
@@ -86,6 +104,28 @@ await dispatch("counter/add", 1);
 
 El subpaquete opcional `bridge` convierte un Store en la única fuente de verdad para ventanas nativas y páginas web. Las páginas solo ven lo que devuelve la proyección, reciben un frame cuando cambia (agrupados en el más reciente solo cuando una página lenta acumula cerca de 1 MiB de frames sin recoger) y solo cambian el estado mediante las acciones que Go registra. El cliente JavaScript de [`bridge/client`](bridge/client/nodra.js) no tiene dependencias. Consulta [`docs/bridge.md`](docs/bridge.md) y [`examples/web`](examples/web/main.go).
 
+## Persistencia
+
+```go
+persistence := nodra.NewPersistence(store, nodra.FileStorage{Path: "state.json", Backup: true}, nodra.JSONCodec[State]{})
+// A missing file is a first start. Stop on any other load error: autosave would overwrite the file.
+if err := persistence.Load(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	return err
+}
+writer, err := persistence.AutoSaveAsync(ctx, nodra.AsyncOptions{Debounce: 100 * time.Millisecond})
+if err != nil {
+	return err
+}
+defer func() {
+	if err := writer.Close(shutdownCtx); err != nil {
+		// The store still owns the data: retry with persistence.Save using a fresh context, or report the error.
+		log.Printf("save state: %v", err)
+	}
+}()
+```
+
+Usa `VersionedJSONCodec`, `AESGCMCodec`, `Journal`, `Durable` y `WithConflictDetection` cuando la aplicación necesite migraciones, cifrado o garantías más fuertes de recuperación de archivos. Los detalles están en [`docs/architecture.md`](docs/architecture.md).
+
 ## Ejemplo completo
 
 [`examples/workbench`](examples/workbench/README.md) es el proyecto completo Nodra + MyGo: estado clonado, borradores locales, persistencia validada con copias, búsqueda asíncrona cancelable con debounce, guardado asíncrono, Scope, invalidación nativa, inglés/chino simplificado y DevTools opcional.
@@ -95,14 +135,39 @@ go run ./examples/workbench
 go run ./examples/workbench -devtools
 ```
 
-## DevTools y documentación
+Los ejemplos más pequeños cubren una integración cada uno:
 
-DevTools es de solo lectura por defecto. `AllowRestore` activa explícitamente la edición JSON tipada y la restauración de instantáneas. Consulta [`docs/devtools.md`](docs/devtools.md) para más detalles.
+- [`examples/basic`](examples/basic/main.go): Store, suscripciones y lotes.
+- [`examples/mygo`](examples/mygo/main.go): ventanas nativas, invalidación, y Deshacer y Rehacer del menú Edit.
+- [`examples/persistent`](examples/persistent/main.go): migraciones, copias de seguridad y persistencia write-behind.
+- [`examples/devtools`](examples/devtools/main.go): inspector local y restauración.
+- [`examples/web`](examples/web/main.go): una ventana nativa y una página web que comparten un Store mediante el puente.
 
-- [`docs/public-api.md`](docs/public-api.md): índice de la API pública.
-- [`docs/architecture.md`](docs/architecture.md): propiedad, concurrencia y ciclo de vida.
+## DevTools
+
+```go
+inspector := devtools.New(devtools.Options{})
+defer inspector.Close()
+stop, err := devtools.Attach(inspector, "state", store.ReadOnly())
+if err != nil {
+	panic(err)
+}
+defer stop()
+url, _ := inspector.Listen()
+fmt.Println(url)
+```
+
+DevTools es de solo lectura por defecto. `AllowRestore` activa explícitamente la edición JSON tipada y la restauración de instantáneas. Consulta [`docs/devtools.md`](docs/devtools.md) para la ocultación de datos sensibles, los límites, el modo remoto de solo lectura y el contrato de compatibilidad JSON.
+
+## Documentación
+
+- [`docs/public-api.md`](docs/public-api.md): índice de la API del paquete raíz.
+- [`docs/bridge.md`](docs/bridge.md): páginas web que siguen un Store y despachan acciones.
+- [`docs/architecture.md`](docs/architecture.md): semántica de propiedad, concurrencia y ciclo de vida.
 - [`docs/compatibility.md`](docs/compatibility.md): política de compatibilidad de v0.x a v1.
-- [`docs/support.md`](docs/support.md): matriz de Go, MyGo, sistemas y arquitecturas compatibles.
+- [`docs/support.md`](docs/support.md): matriz de Go, MyGo, sistemas operativos, arquitecturas y sistemas de archivos compatibles.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): flujo de desarrollo y verificación.
+- [`SECURITY.md`](SECURITY.md): notificación de vulnerabilidades y política de datos sensibles.
 
 ## Verificación
 
@@ -110,6 +175,8 @@ DevTools es de solo lectura por defecto. `AllowRestore` activa explícitamente l
 go test ./...
 go test -race ./...
 go vet ./...
+golangci-lint run ./...
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-El proyecto requiere Go `1.27.3+` y usa MyGo `v0.7.4` para la integración nativa.
+Nodra es un único módulo Go: `github.com/yldm-tech/nodra`. El proyecto requiere Go `1.27.3` o posterior y usa MyGo `v0.7.4` para la integración nativa.

@@ -7,6 +7,9 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -130,4 +133,78 @@ func TestREADMEPersistenceSnippet(t *testing.T) {
 			t.Fatalf("state.json holds %+v (%v), want the store value", saved, err)
 		}
 	})
+}
+
+var (
+	markdownLink   = regexp.MustCompile(`\]\(([^)\s]+)\)`)
+	modulePath     = regexp.MustCompile("`(github\\.com/yldm-tech/nodra[^`@]*)`")
+	markdownHeader = regexp.MustCompile(`(?m)^## `)
+)
+
+func sortedUnique(values []string) []string {
+	slices.Sort(values)
+	return slices.Compact(values)
+}
+
+// difference returns the values of a that are not in b.
+func difference(a, b []string) []string {
+	var missing []string
+	for _, value := range a {
+		if !slices.Contains(b, value) {
+			missing = append(missing, value)
+		}
+	}
+	return missing
+}
+
+// readmeFacts returns the language-neutral content of a README: its code blocks in order, the link targets other than the language switcher, the module paths it names and its section count.
+func readmeFacts(markdown string) (blocks, links, paths []string, sections int) {
+	for _, match := range markdownLink.FindAllStringSubmatch(markdown, -1) {
+		if !strings.HasPrefix(match[1], "README") {
+			links = append(links, match[1])
+		}
+	}
+	for _, match := range modulePath.FindAllStringSubmatch(markdown, -1) {
+		paths = append(paths, match[1])
+	}
+	return fencedBlocks(markdown), sortedUnique(links), sortedUnique(paths), len(markdownHeader.FindAllString(markdown, -1))
+}
+
+// TestREADMETranslationsMatchEnglish keeps every translated README in step with README.md. Prose is translated, but code, links, package paths and sections are the same in every language, so a translation that misses a section or a package shows up here.
+func TestREADMETranslationsMatchEnglish(t *testing.T) {
+	blocks, links, paths, sections := readmeFacts(readText(t, "README.md"))
+	translations, err := filepath.Glob("README.*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(translations) == 0 {
+		t.Fatal("no translated READMEs found")
+	}
+	for _, path := range translations {
+		gotBlocks, gotLinks, gotPaths, gotSections := readmeFacts(readText(t, path))
+		if !slices.Equal(gotBlocks, blocks) {
+			for i := range max(len(blocks), len(gotBlocks)) {
+				var got, want string
+				if i < len(gotBlocks) {
+					got = gotBlocks[i]
+				}
+				if i < len(blocks) {
+					want = blocks[i]
+				}
+				if got != want {
+					t.Errorf("%s: code block %d differs from README.md:\n got:\n%s\nwant:\n%s", path, i+1, got, want)
+					break
+				}
+			}
+		}
+		if !slices.Equal(gotLinks, links) {
+			t.Errorf("%s: links missing %v, extra %v", path, difference(links, gotLinks), difference(gotLinks, links))
+		}
+		if !slices.Equal(gotPaths, paths) {
+			t.Errorf("%s: module paths %v, README.md names %v", path, gotPaths, paths)
+		}
+		if gotSections != sections {
+			t.Errorf("%s: %d sections, README.md has %d", path, gotSections, sections)
+		}
+	}
 }
