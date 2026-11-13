@@ -16,14 +16,15 @@ application ───► Store[T] ─┼─ normal subscribers ─► UI invalid
 
 ```go
 err := store.UpdateErr(func(state *State) error {
-    items := maps.Clone(state.Items)
-    items["word"] = updatedItem
-    state.Items = items
-    return validate(*state)
+	items := make(map[string]Item, len(state.Items)+1)
+	maps.Copy(items, state.Items)
+	items["word"] = updatedItem
+	state.Items = items
+	return validate(*state)
 })
 ```
 
-This example assumes the map values do not themselves contain mutable shared data; nested reference types need copying too. Do not mutate data returned by `Get` or `Snapshot` outside an update, and do not retain a mutable alias passed to `New` or `Set` for later mutation.
+The copy starts from `make` because `maps.Clone` returns nil for a nil map, such as the field of a zero-value `State` or one that JSON left out, and assigning to a nil map panics. This example assumes the map values do not themselves contain mutable shared data; nested reference types need copying too. Do not mutate data returned by `Get` or `Snapshot` outside an update, and do not retain a mutable alias passed to `New` or `Set` for later mutation.
 
 `NewWithClone` provides a second ownership policy. It clones initial state into independent current/reset values, clones update candidates before user code runs, and clones again on commit so retaining a candidate cannot modify owned state. Reads and each notification receive separate copies, including mutation Previous and Value metadata. Failed callbacks and failed commit clones never replace the owned state or publish; the store lock is released even if a clone panics. Reset, batch metadata and undo/redo retain their previous values with mutable references. The clone function is application-supplied, must copy all mutable nested data, must be concurrency-safe, and must not reenter the store. The default policy and its zero-copy reference semantics remain available through `New` and `Define`; `DefineWithClone` propagates isolation to each named instance.
 
