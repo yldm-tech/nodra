@@ -81,7 +81,7 @@ All three helpers register a window-close listener and return an idempotent stop
 
 Widget inputs bind pointers to local snapshot fields; commit only edited fields with `Store.Update` so unrelated concurrent changes survive. Keep transient drafts and widget state in the UI owner. Store subscriptions and selectors run on writer goroutines, while MyGo's `Window.Invalidate` safely posts the frame request to its main thread. Other UI-owned changes still require `Window.Update`.
 
-The helpers live in the root package, so the module requires MyGo, but the Store never calls into MyGo itself: it works without a running MyGo app, in services and in tests.
+The helpers live in the root package, so the module requires MyGo, but the Store never calls into MyGo itself: it works without a running MyGo app, in services and in tests. Linking MyGo still has costs outside a desktop app: its `init` locks the main goroutine to its OS thread, and on Linux its purego fallback makes a `CGO_ENABLED=0` executable dynamically linked against glibc, so it does not start in scratch, distroless-static or musl images. Services, CLIs and tests that use only the core and DevTools can build with `-tags nodra_nomygo`, which leaves out the five `*mygo.Window` helpers (`api_mygo.go`, `internal/core/invalidate_mygo.go`) and drops MyGo from the binary; `InvalidateTarget` and the shared window binding stay in the untagged build. `bridge` and `nativeui` are MyGo integrations and keep requiring it. The default build and the v1 API are unchanged by the tag.
 
 ## DevTools integration
 
