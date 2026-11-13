@@ -61,9 +61,6 @@ func TestFileStorageAcceptsNilContext(t *testing.T) {
 }
 
 func TestFileStorageDurableRenameAndEncryptedPersistence(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory fsync is platform-specific")
-	}
 	path := filepath.Join(t.TempDir(), "durable", "state.json")
 	keys, err := NewMemoryKeyProvider("v1", []byte("01234567890123456789012345678901"))
 	requireNoError(t, err)
@@ -183,6 +180,20 @@ func TestJournaledFileStorageDiscardsStaleCommitMarkerWithUncommittedJournal(t *
 	for _, suffix := range []string{".journal", ".commit"} {
 		if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("journal artifact %s remains: %v", suffix, err)
+		}
+	}
+}
+
+// Durable must not turn every successful replacement into a failure on platforms without directory fsync, and the backup must still be written.
+func TestFileStorageDurableSaveWritesBackup(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "durable", "state.json")
+	storage := FileStorage{Path: path, Durable: true, Backup: true}
+	requireNoError(t, storage.Save(ctx, []byte("state")))
+	for _, candidate := range []string{path, path + ".bak"} {
+		data, err := os.ReadFile(candidate)
+		if err != nil || string(data) != "state" {
+			t.Fatalf("%s=%q err=%v", candidate, data, err)
 		}
 	}
 }

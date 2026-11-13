@@ -29,7 +29,7 @@ type FileStorage struct {
 	Perm os.FileMode
 	// Backup writes an independent Path+".bak" copy after each successful primary replacement. A backup failure is returned even though the primary may already contain the new state. Use one Persistence writer per destination.
 	Backup bool
-	// Durable syncs the containing directory after each rename. This makes the file name update durable across a crash on filesystems that support directory fsync. It may add latency and is opt-in for compatibility.
+	// Durable syncs the containing directory after each rename. This makes the file name update durable across a crash on filesystems that support directory fsync. Windows has no directory fsync, so Durable adds nothing there and does not fail the save. It may add latency and is opt-in for compatibility.
 	Durable bool
 	// Journal enables a two-phase crash recovery record. The journal is committed only after the primary rename and directory sync; an unfinished record is discarded on the next Load. It adds extra filesystem writes and is opt-in.
 	Journal bool
@@ -281,6 +281,10 @@ func (f FileStorage) save(ctx context.Context, data []byte, primarySaved func())
 }
 
 func syncDirectory(path string) error {
+	// Windows cannot flush a directory: FlushFileBuffers needs a handle opened for writing, which a directory handle is not, so it fails with access denied after the rename has already succeeded.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	directory, err := os.Open(path)
 	if err != nil {
 		return err

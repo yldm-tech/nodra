@@ -26,6 +26,7 @@
 ### Bug Fixes
 
 * **persistence:** a journaled FileStorage no longer fails every Load, WithConflictDetection and CheckedFileStorage call after a crash or failed removal during journal cleanup: cleanup now removes the commit marker before the journal, and recovery discards a commit marker that has no matching journal instead of returning "read committed journal" or "committed journal checksum mismatch"
+* **persistence:** `FileStorage{Durable: true}` no longer fails every Save on Windows with an access-denied directory sync after the primary was already replaced, which also skipped the backup; Windows has no directory fsync, so the sync is skipped there, as the journal path already did
 
 ### Dependencies
 
