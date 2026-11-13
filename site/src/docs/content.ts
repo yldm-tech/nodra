@@ -411,6 +411,10 @@ persistence := nodra.NewPersistence(store,
 	nodra.FileStorage{Path: "state.json"},
 	nodra.JSONCodec[State]{},
 )
+// Load first: autosave writes the current state at once. A missing file is a first start; stop on any other error.
+if err := persistence.Load(context.Background()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	return err
+}
 writer, err := persistence.AutoSaveAsync(context.Background(), nodra.AsyncOptions{Debounce: 200 * time.Millisecond})
 if err != nil {
 	return err
