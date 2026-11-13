@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"maps"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -116,26 +117,37 @@ func TestTransactionCommitsDoNotShareStateWithARetainedCandidate(t *testing.T) {
 }
 
 func TestAtomicGroupAndAtomic2RejectOneClosedParticipant(t *testing.T) {
+	// AtomicGroup prepares its participants in store address order, whatever the argument order, so closedLow decides which one it prepares first: with closedLow the closed store is rejected before the open store's callback runs, without it the open store is prepared and then the closed one is rejected. Atomic2 checks both stores before its callback, in argument order.
 	paths := []struct {
-		name string
-		run  func(open, closed *Store[int]) error
+		name      string
+		closedLow bool
+		run       func(open, closed *Store[int]) error
 	}{
-		{"AtomicGroup", func(open, closed *Store[int]) error {
-			return AtomicGroup(AtomicUpdate(open, func(v *int) error { *v = 2; return nil }), AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }))
-		}},
-		{"AtomicGroup closed first", func(open, closed *Store[int]) error {
+		{"AtomicGroup open prepared first", false, func(open, closed *Store[int]) error {
 			return AtomicGroup(AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }), AtomicUpdate(open, func(v *int) error { *v = 2; return nil }))
 		}},
-		{"Atomic2", func(open, closed *Store[int]) error {
+		{"AtomicGroup closed prepared first", true, func(open, closed *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(open, func(v *int) error { *v = 2; return nil }), AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }))
+		}},
+		{"Atomic2", false, func(open, closed *Store[int]) error {
 			return Atomic2(open, closed, func(a, b *int) error { *a, *b = 2, 20; return nil })
 		}},
-		{"Atomic2 closed first", func(open, closed *Store[int]) error {
+		{"Atomic2 closed first", false, func(open, closed *Store[int]) error {
 			return Atomic2(closed, open, func(a, b *int) error { *a, *b = 20, 2; return nil })
 		}},
 	}
 	for _, path := range paths {
 		t.Run(path.name, func(t *testing.T) {
-			open, closed := New(1), New(10)
+			low, high := New(0), New(0)
+			if reflect.ValueOf(high).Pointer() < reflect.ValueOf(low).Pointer() {
+				low, high = high, low
+			}
+			open, closed := low, high
+			if path.closedLow {
+				open, closed = high, low
+			}
+			requireNoError(t, open.Set(1))
+			requireNoError(t, closed.Set(10))
 			defer func() { _ = open.Close() }()
 			requireNoError(t, closed.Close())
 			openVersion, closedVersion := open.Version(), closed.Version()

@@ -199,17 +199,32 @@ func TestDerivedCloseDoesNotHoldItsLockWhileUnsubscribing(t *testing.T) {
 }
 
 func TestDerivedCloseRacingAnUpdateThatReadsIt(t *testing.T) {
-	// No deferred store.Close: on a deadlock the store lock stays held, and a deferred Close would hang the test binary instead of failing the test.
 	store := New(1)
 	doubled := Derive[int, int](store, func(v int) int { return v * 2 }, nil)
-	entered, proceed, updated := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	entered, proceed, abort, updated := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	// On a regression the update gives up instead of staying blocked: it returns, so the store lock and the transaction gate are released, the old Close can finish unsubscribing, and later tests in the package that take the gate still run. The derived read runs in its own goroutine so the update can give up even while that read is blocked on the derived lock.
 	go func() {
 		updated <- store.Update(func(v *int) {
 			close(entered)
-			<-proceed
-			*v = doubled.Get() + 1
+			select {
+			case <-proceed:
+			case <-abort:
+				return
+			}
+			read := make(chan int, 1)
+			go func() { read <- doubled.Get() }()
+			select {
+			case got := <-read:
+				*v = got + 1
+			case <-abort:
+			}
 		})
 	}()
+	fail := func(msg string) {
+		close(abort)
+		<-updated
+		t.Fatal(msg)
+	}
 	<-entered
 	closed := make(chan error, 1)
 	go func() { closed <- doubled.Close() }()
@@ -217,14 +232,14 @@ func TestDerivedCloseRacingAnUpdateThatReadsIt(t *testing.T) {
 	select {
 	case <-doubled.Done():
 	case <-time.After(5 * time.Second):
-		t.Fatal("deadlock: Close is waiting for the store lock while it holds the derived lock")
+		fail("deadlock: Close is waiting for the store lock while it holds the derived lock")
 	}
 	close(proceed)
 	select {
 	case err := <-updated:
 		requireNoError(t, err)
 	case <-time.After(5 * time.Second):
-		t.Fatal("deadlock: the update cannot read the derived value while Close holds it")
+		fail("deadlock: the update cannot read the derived value while Close holds it")
 	}
 	requireNoError(t, <-closed)
 	if got := store.Get(); got != 3 {
