@@ -5,6 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/yldm-tech/nodra"
 )
@@ -117,4 +119,26 @@ func TestRootPersistenceAndAsyncActionContracts(t *testing.T) {
 	if err := action.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestRootAsyncPersistenceMaxWait(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		path := filepath.Join(t.TempDir(), "state.json")
+		store := nodra.New(1)
+		defer func() { _ = store.Close() }()
+		storage := nodra.FileStorage{Path: path}
+		writer, err := nodra.NewPersistence(store, storage, nodra.JSONCodec[int]{}).AutoSaveAsync(ctx, nodra.AsyncOptions{Debounce: time.Hour, MaxWait: time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if data, err := storage.Load(ctx); err != nil || string(data) != "1" {
+			t.Fatalf("saved after MaxWait = %q, %v", data, err)
+		}
+		if err := writer.Close(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

@@ -441,3 +441,59 @@ func TestAsyncPersistenceContainsWorkerPanics(t *testing.T) {
 		})
 	}
 }
+
+// Updates arriving faster than Debounce restart the trailing delay forever. MaxWait bounds that postponement from the start of each wait, and zero keeps the unbounded behaviour.
+func TestAsyncMaxWaitBoundsDebouncePostponement(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		maxWait       time.Duration
+		before, after []int
+	}{
+		{name: "unbounded", before: nil, after: []int{100}},
+		// Waits start at 0 ms and 1020 ms, so the writes at 1000 ms and 2020 ms capture the updates made at 990 ms and 2010 ms; the third wait has not expired when updates stop at 3000 ms.
+		{name: "bounded", maxWait: time.Second, before: []int{33, 67}, after: []int{33, 67, 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store, storage := New(0), &asyncStorage{}
+				writer, err := NewPersistence(store, storage, JSONCodec[int]{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: 100 * time.Millisecond, MaxWait: tc.maxWait})
+				requireNoError(t, err)
+				for i := 1; i <= 100; i++ {
+					time.Sleep(30 * time.Millisecond)
+					requireNoError(t, store.Set(i))
+				}
+				synctest.Wait()
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.before) {
+					t.Fatalf("writes during continuous updates = %v, want %v", values, tc.before)
+				}
+				requireNoError(t, writer.Close(context.Background()))
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.after) {
+					t.Fatalf("writes after close = %v, want %v", values, tc.after)
+				}
+			})
+		})
+	}
+}
+
+func TestAsyncMaxWaitShorterThanDebounceAndValidation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store, storage := New(1), &asyncStorage{}
+		persistence := NewPersistence(store, storage, JSONCodec[int]{})
+		if _, err := persistence.AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Second, MaxWait: -time.Second}); !errors.Is(err, ErrInvalidPersistence) {
+			t.Fatalf("negative MaxWait = %v", err)
+		}
+		writer, err := persistence.AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Hour, MaxWait: time.Minute})
+		requireNoError(t, err)
+		time.Sleep(time.Minute - time.Millisecond)
+		synctest.Wait()
+		if _, calls := storage.result(); calls != 0 {
+			t.Fatal("MaxWait wrote before its deadline")
+		}
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		if values, _ := storage.result(); !reflect.DeepEqual(values, []int{1}) {
+			t.Fatalf("writes at MaxWait = %v", values)
+		}
+		requireNoError(t, writer.Close(context.Background()))
+	})
+}
