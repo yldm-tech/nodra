@@ -105,10 +105,7 @@ func (f FileStorage) saveJournaled(ctx context.Context, data []byte, primarySave
 	if err := writeAtomicFile(ctx, f.commitPath(), []byte(hex.EncodeToString(digest[:])), 0600, durable); err != nil {
 		return err
 	}
-	if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.Remove(f.commitPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := f.removeJournalRecord(); err != nil {
 		return err
 	}
 	if durable {
@@ -143,12 +140,22 @@ func (f FileStorage) recoverJournal(ctx context.Context) error {
 		return err
 	}
 	journal, err := os.ReadFile(f.journalPath())
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("nodra: read committed journal: %w", err)
 	}
 	digest := sha256.Sum256(journal)
-	if strings.TrimSpace(string(marker)) != hex.EncodeToString(digest[:]) {
-		return errors.New("nodra: committed journal checksum mismatch")
+	if err != nil || strings.TrimSpace(string(marker)) != hex.EncodeToString(digest[:]) {
+		// A marker is written only after the primary replacement is durable, so a marker without a matching journal belongs to a save that already finished: the cleanup was interrupted before the marker was removed, and any journal next to it is a later save that never committed. The primary is authoritative; discard both records.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := f.removeJournalRecord(); err != nil {
+			return err
+		}
+		if runtime.GOOS != "windows" {
+			return syncDirectory(filepath.Dir(f.Path))
+		}
+		return nil
 	}
 	perm := f.Perm
 	if perm == 0 {
@@ -157,14 +164,22 @@ func (f FileStorage) recoverJournal(ctx context.Context) error {
 	if err := writeAtomicFile(ctx, f.Path, journal, perm, runtime.GOOS != "windows"); err != nil {
 		return fmt.Errorf("nodra: recover %s: %w", f.Path, err)
 	}
-	if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.Remove(f.commitPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := f.removeJournalRecord(); err != nil {
 		return err
 	}
 	if runtime.GOOS != "windows" {
 		return syncDirectory(filepath.Dir(f.Path))
+	}
+	return nil
+}
+
+// removeJournalRecord deletes the commit marker before the journal. An interruption between the two removals leaves only an uncommitted journal, which the next Load discards; the reverse order would leave a marker without its journal.
+func (f FileStorage) removeJournalRecord() error {
+	if err := os.Remove(f.commitPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Remove(f.journalPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 	return nil
 }

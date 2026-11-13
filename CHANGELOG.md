@@ -23,6 +23,10 @@
 * **bridge:** `Expose` and `ExposeProjection` return `ErrInvalid` for a zero `ReadOnly` (or a `Store` or `ReadOnly` without a store) instead of serving its zero value through a watch that never ends
 * **core:** closing a store inside an open batch gives its last committed value a new version instead of one already published with an older value
 
+### Bug Fixes
+
+* **persistence:** a journaled FileStorage no longer fails every Load, WithConflictDetection and CheckedFileStorage call after a crash or failed removal during journal cleanup: cleanup now removes the commit marker before the journal, and recovery discards a commit marker that has no matching journal instead of returning "read committed journal" or "committed journal checksum mismatch"
+
 ### Dependencies
 
 * support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour
