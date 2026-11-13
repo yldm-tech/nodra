@@ -85,3 +85,65 @@ func TestNamedActionFactory(t *testing.T) {
 		t.Fatalf("value=%d err=%v", store.Get(), err)
 	}
 }
+
+func TestDerivedDoneClosesWithTheDerivedValue(t *testing.T) {
+	store := New(1)
+	defer func() { _ = store.Close() }()
+	derived := Derive[int, int](store, func(v int) int { return v * 2 }, nil)
+	done := derived.Done()
+	if done == nil {
+		t.Fatal("Done is nil for an open derived value")
+	}
+	select {
+	case <-done:
+		t.Fatal("Done closed before Close")
+	default:
+	}
+	requireNoError(t, derived.Close())
+	select {
+	case <-done:
+	default:
+		t.Fatal("Done did not close with Close")
+	}
+	if derived.Done() != done {
+		t.Fatal("Done returned a different channel after Close")
+	}
+
+	invalid := []interface{ Done() <-chan struct{} }{
+		Derive[int, int](nil, func(v int) int { return v }, nil),
+		Derive[int, int](store, nil, nil),
+		DeriveProjection[int, int](nil, func(v int) int { return v }, nil),
+		Combine[int, int, int](nil, store, func(a, b int) int { return a + b }, nil),
+	}
+	for i, d := range invalid {
+		select {
+		case <-d.Done():
+		default:
+			t.Fatalf("invalid derived value %d is not done", i)
+		}
+	}
+	var missing *Derived[int, int]
+	if missing.Done() != nil {
+		t.Fatal("nil derived value returned a Done channel")
+	}
+}
+
+func TestDerivedWithNilEqualsNotifiesEveryAcceptedVersion(t *testing.T) {
+	store := New(apiState{})
+	selectCount := func(s apiState) int { return s.Count }
+	unfiltered := Derive[apiState, int](store, selectCount, nil)
+	filtered := Derive[apiState, int](store, selectCount, func(a, b int) bool { return a == b })
+	defer func() { _ = unfiltered.Close(); _ = filtered.Close() }()
+	var unfilteredCalls, filteredCalls int
+	unfiltered.Subscribe(func(int) { unfilteredCalls++ })
+	filtered.Subscribe(func(int) { filteredCalls++ })
+	for _, name := range []string{"a", "b", "c"} {
+		requireNoError(t, store.Update(func(s *apiState) { s.Name = name }))
+	}
+	if unfilteredCalls != 3 || filteredCalls != 0 {
+		t.Fatalf("notifications with nil equals = %d, with equals = %d; want 3 and 0", unfilteredCalls, filteredCalls)
+	}
+	if unfiltered.Snapshot().Version != store.Version() || filtered.Snapshot().Version != store.Version() {
+		t.Fatal("derived versions did not follow the source")
+	}
+}

@@ -36,7 +36,7 @@ var (
 	ErrNotFound = errors.New("nodra bridge: state or action not found")
 	// ErrExists is returned when a name is exposed or registered twice.
 	ErrExists = errors.New("nodra bridge: name already in use")
-	// ErrInvalid is returned for an empty name, a nil source or function, and an argument that does not decode.
+	// ErrInvalid is returned for an empty name, a nil source or function, a Store or ReadOnly without a store (such as a zero ReadOnly), and an argument that does not decode.
 	ErrInvalid = errors.New("nodra bridge: invalid name, source or argument")
 	// ErrDenied is returned when Options.AllowRead or Options.AllowDispatch refuses the calling page.
 	ErrDenied = errors.New("nodra bridge: not allowed for this page")
@@ -126,6 +126,10 @@ func Expose[T any](b *Bridge, name string, source nodra.Observable[T]) (stop fun
 // ExposeProjection makes the projection of source readable by pages under name. Pages see only what project returns, encoded as JSON, so secrets and large internals can stay in Go. A page receives a frame only when the encoded projection changes, so changes to fields the projection leaves out send nothing. project runs on the goroutine of each page's watch, possibly for several pages at once: it must be pure, concurrency-safe and treat the source's reference values as read-only.
 func ExposeProjection[T, V any](b *Bridge, name string, source nodra.Observable[T], project func(T) V) (stop func(), err error) {
 	if b == nil || !validName(name) || isNil(source) || project == nil {
+		return nil, ErrInvalid
+	}
+	// A Reader (a Store or ReadOnly) without a store, such as a zero ReadOnly, has a nil Done: it would serve its zero value and its watches would never end. Core's validObservable rejects the same sources.
+	if reader, ok := source.(nodra.Reader[T]); ok && reader.Done() == nil {
 		return nil, ErrInvalid
 	}
 	e := &exposure{

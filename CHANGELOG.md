@@ -4,8 +4,18 @@
 
 ### Features
 
+* **core:** add `Derived.Done`, closed by `Close`, so a bridge watch of a derived value ends with `ErrClosed` when the derived value closes
 * **bridge:** let the web pages of a MyGo app follow a Store and change it through registered actions: `bridge.Expose` and `bridge.ExposeProjection` serve a source, or the part of it pages may see, through a bound service whose watch sends a frame only when the encoded value changes and coalesces to the latest while a page is slow; `bridge.Handle` registers the actions pages dispatch; `Options.AllowRead` and `Options.AllowDispatch` decide per page. A dependency-free JavaScript client (`bridge/client`, also served from Go as `bridge.Client`) fits React's `useSyncExternalStore`. See docs/bridge.md and examples/web
 * **nativeui:** make a native UI window's Undo and Redo act on a History: `nativeui.UndoShortcuts` registers Cmd+Z and Shift+Cmd+Z (and Ctrl+Y on Windows) while history can act, so with MyGo 0.7.4 on macOS the Edit menu enables its items only then, and a focused text input keeps its own undo; `nativeui.InvalidateHistory` redraws the window when that changes. A separate subpackage, so apps without native UI do not link MyGo's ui package
+
+### Bug Fixes
+
+* **core:** an update callback that reads another store no longer deadlocks every store when an `Atomic2` or `AtomicGroup` starts meanwhile; store reads no longer take the global transaction gate, and the docs state that update callbacks may read other stores but must not write to any store
+* **core:** transactions settle derived values by height, so a `Combine` whose inputs are Stores, read-only views or derived values at different depths, and anything derived from it, no longer sees a half-applied transaction, and a derived value settles on the newest snapshot of a transaction. An application `Observable` counts as height zero, so one that forwards a derived value is still not settled after it
+* **core:** a `Derive` or `Combine` constructed while a transaction is being dispatched no longer loses its catch-up and stays stale
+* **core:** an `Atomic2` or `AtomicGroup` commit into a store with an open batch becomes the batch's publication boundary: the batch no longer republishes the transaction's value, and each mutation's `Previous` is the value subscribers last received
+* **bridge:** `Expose` and `ExposeProjection` return `ErrInvalid` for a zero `ReadOnly` (or a `Store` or `ReadOnly` without a store) instead of serving its zero value through a watch that never ends
+* **core:** closing a store inside an open batch gives its last committed value a new version instead of one already published with an older value
 
 ### Dependencies
 
@@ -13,6 +23,7 @@
 
 ### Documentation
 
+* **core:** state that a derived value with a nil equals function notifies on every accepted source version, and that an equality function is what filters unchanged values
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 
 ## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)

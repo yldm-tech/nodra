@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Observable is a versioned value source shared by stores, read-only views and derived values. Callbacks may overlap and must treat reference values as read-only. Implementations must use monotonically increasing versions and subscribe without replay; constructors catch up after subscribing.
+// Observable is a versioned value source shared by stores, read-only views and derived values. Callbacks may overlap and must treat reference values as read-only. Implementations must use monotonically increasing versions and subscribe without replay; constructors catch up after subscribing. Transaction settlement orders derived values by height, which only Nodra's own derived values carry: an application implementation counts as a source of height zero even when it forwards a derived value, so a Combine over such a wrapper and the derived value's other inputs may see a half-applied Atomic2 or AtomicGroup.
 type Observable[T any] interface {
 	Snapshot() Snapshot[T]
 	SubscribeSnapshot(func(Snapshot[T])) func()
@@ -70,11 +70,12 @@ type Pair[A, B any] struct {
 	Second B
 }
 
-// Combine derives a value from two stores or derived values. Independent writes are eventually consistent, while Atomic2 and AtomicGroup transaction notifications are settled through the derived graph before downstream callbacks run. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable.
+// Combine derives a value from two stores or derived values. Independent writes are eventually consistent, while Atomic2 and AtomicGroup transaction notifications are settled through the derived graph before downstream callbacks run. That ordering covers Stores, ReadOnly views and Nodra derived values; an application Observable counts as a source of height zero, so one that forwards a derived value is not settled after it. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable.
 func Combine[A, B, V any](first Observable[A], second Observable[B], project func(A, B) V, equals func(V, V) bool) *Derived[Pair[A, B], V] {
 	if !validObservable(first) || !validObservable(second) || project == nil {
-		return &Derived[Pair[A, B], V]{closed: true}
+		return closedDerived[Pair[A, B], V]()
 	}
+	height := max(observableHeight(first), observableHeight(second)) + 1
 	a, b := first.Snapshot(), second.Snapshot()
 	var mu sync.Mutex
 	transactionID := uint64(0)
@@ -122,7 +123,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 			if transactionID == 0 {
 				fn(value)
 			} else if deferred {
-				deferTransaction(transactionID, func() {
+				deferTransaction(transactionID, height, func() {
 					mu.Lock()
 					delete(pendingTransactions, transactionID)
 					value := current
@@ -149,7 +150,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 			if transactionID == 0 {
 				fn(value)
 			} else if deferred {
-				deferTransaction(transactionID, func() {
+				deferTransaction(transactionID, height, func() {
 					mu.Lock()
 					delete(pendingTransactions, transactionID)
 					value := current
@@ -165,5 +166,5 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 		ready = true
 		return stop
 	}
-	return derive(nil, snapshot, subscribe, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals)
+	return derive(nil, snapshot, subscribe, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals, height)
 }
