@@ -142,8 +142,6 @@ Each action owns a FIFO of accepted tasks, a running-work count and latest owner
 
 Retry is opt-in and requires an explicit idempotent declaration. `MaxAttempts` includes the first work call; exponential backoff is bounded by `MaxBackoff`. A retry never repeats the apply callback, and cancellation stops the delay without another attempt. Per-run attempt count is exposed through `TaskMetrics`; `AsyncAction.Metrics` aggregates terminal outcomes without retaining completed task objects.
 
-Retry is opt-in and requires an explicit idempotent declaration. `MaxAttempts` includes the first work call; exponential backoff is bounded by `MaxBackoff`. A retry never repeats the apply callback, and cancellation stops the delay without another attempt. Per-run attempt count is exposed through `TaskMetrics`; `AsyncAction.Metrics` aggregates terminal outcomes without retaining completed task objects.
-
 Task status revisions prevent overlapping progress notifications from replacing a newer global status. Preparing a source trace is ordered with that task's status lock; trace callbacks run after every lock is released. This prevents delayed progress from resurrecting a terminal source entry. Source active-task snapshots include a trace revision for attach/resume reconciliation. Terminal entries leave that map, while each Task owns its closed status snapshot. Action ID is allocated by the source; RunID belongs to one AsyncAction. Published mutation and completion metadata share the exact accepted commit version. Batches intentionally coalesce action identity at their later publication boundary.
 
 ## Recovery boundary

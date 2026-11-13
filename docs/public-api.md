@@ -19,23 +19,33 @@ Create a store with `nodra.New`, `nodra.NewWithClone`, or `nodra.Create`. `Store
 
 Use `nodra.Atomic2`, `nodra.AtomicGroup`, and `nodra.AtomicUpdate` when several stores must become visible together. Do not call store methods from an atomic candidate callback; mutate only the supplied candidate pointers. Callback errors and preparation panics leave every participant unchanged; preparation panics return `PanicError`. After commit, a synchronous notification panic propagates to the caller without rolling back any participant.
 
+## Factories and field bindings
+
+`nodra.Define(id, initial)` and `nodra.DefineWithClone(id, initial, clone)` return a `Definition[T]`, a reusable named store factory. `Definition.New` runs `initial` and returns a store with independent state whose `ID` is the definition's id, which `Definition.ID` also returns; a nil `initial` yields the zero value. `Define` stores copy values shallowly like `New`, so `initial` must return fresh maps, slices and pointers for the instances to stay independent. `DefineWithClone` stores follow the `NewWithClone` isolation policy.
+
+`nodra.BindField(store, read, write)` returns a `Field[T, V]` that edits one field of shared state, or `ErrInvalidBinding` when an argument is nil. `Field.Get` selects the field from the current store value. `Field.Set` applies `write` to the latest store candidate, so unrelated concurrent changes survive; an error from `write` leaves the store unchanged. `Field.Edit` runs an editor on a local copy outside Store locks, so it can render MyGo controls, and commits only when the editor reports a change. `read` and `write` follow the store's ownership policy. Keep form drafts separate when edits need an explicit Save or Cancel.
+
 ## Read-only and derived values
 
 `Store.ReadOnly()` returns `ReadOnly[T]`, which exposes observation without write or close capability. `Reader[T]` is the sealed observation surface accepted by projection and DevTools APIs; applications cannot implement it. `Observable[T]` is the smaller versioned surface accepted by `Derive`, `Combine`, and invalidation helpers and can be implemented by applications. Transactions settle derived values in dependency order only for Stores, read-only views and Nodra derived values: an application `Observable` counts as a source of height zero, so a `Combine` over one that forwards a derived value may see a half-applied `Atomic2` or `AtomicGroup`.
 
-Use `Derive`, `DeriveProjection`, `Combine`, `Select`, `SubscribeSelector(With)`, and `SubscribeProjection(With)` for computed values. Equality callbacks must be pure and safe for concurrent calls. A derived value with a nil equals function notifies on every accepted source version; pass one to notify only on changes. Call `Close` on derived values when their owner is done; `Derived.Done` is closed when it is.
+Use `Derive`, `DeriveProjection`, `Combine`, `Select`, `SubscribeSelector(With)`, and `SubscribeProjection(With)` for computed values. `Derived[T, V]` provides `Derived.Get`, `Snapshot`, `Subscribe`, `SubscribeSnapshot`, `Done`, and `Close`. Equality callbacks must be pure and safe for concurrent calls. A derived value with a nil equals function notifies on every accepted source version; pass one to notify only on changes. Call `Close` on derived values when their owner is done; `Derived.Done` is closed when it is.
 
 ## History and persistence
 
 `Track` and `TrackWith` provide undo/redo. `History.Undo`, `Redo`, `CanUndo`, `CanRedo`, `BeginGroup`, `Status`, and `Close` are the supported lifecycle.
 
-`NewPersistence(WithOptions)` separates state from bytes. `JSONCodec`, `VersionedJSONCodec`, `AESGCMCodec`, `FileStorage`, and `FileStorage.WithConflictDetection` compose the built-in persistence stack; conflict detection returns a `CheckedFileStorage`. `Persistence.Load`, `LoadBackup`, `LoadWithRecovery`, and `Save` are explicit operations. `AutoSave`, `AutoSaveWithErrors`, and `AutoSaveAsync` have distinct shutdown and error behavior. `AutoSaveAsync` returns an `AsyncPersistence` whose `Flush`, `Close`, `Errors`, and `Status` expose durability and shutdown results. Callers that need a durable result must handle `Flush` or `Close` errors.
+`NewPersistence(WithOptions)` separates state from bytes. `JSONCodec`, `VersionedJSONCodec`, `AESGCMCodec`, `FileStorage`, and `FileStorage.WithConflictDetection` compose the built-in persistence stack; conflict detection returns a `CheckedFileStorage`. `AESGCMCodec` takes its keys from a `KeyProvider`; `NewMemoryKeyProvider` is an in-memory provider for tests and local applications. `Persistence.Load`, `LoadBackup`, `LoadWithRecovery`, and `Save` are explicit operations. `AutoSave`, `AutoSaveWithErrors`, and `AutoSaveAsync` have distinct shutdown and error behavior. `AutoSaveAsync` returns an `AsyncPersistence` whose `Flush`, `Close`, `Errors`, and `Status` expose durability and shutdown results. Callers that need a durable result must handle `Flush` or `Close` errors.
 
 ## Async actions and ownership
 
 `NewAsyncAction(WithOptions)` creates cancelable latest-result or queued work. `AsyncAction.Run` returns a `Task`; use `Task.Wait` to await that run and `Task.Cancel` to request cancellation. `Task.Done` and `Task.Status` expose completion and progress. `AsyncAction.Close` rejects new runs, cancels accepted work, and waits within its context; it does not flush successful results. `AsyncAction.Status`, `Metrics`, `ExportMetrics`, and `SubscribeMetrics` expose action state and aggregate outcomes.
 
-`Scope.Context`, `Done`, `Observe`, `Defer`, and `Close` own subscriptions, persistence writers, and actions. Register stores before persistence and actions so reverse-order shutdown stops work before draining persistence and closing stores. Close with a fresh deadline during shutdown. `PanicError` identifies asynchronous callback failures, atomic preparation failures, and cleanup failures; ordinary synchronous notification panics propagate unchanged.
+`NewScope` creates a `Scope`. `Scope.Context`, `Done`, `Observe`, `Defer`, and `Close` own subscriptions, persistence writers, and actions. Register stores before persistence and actions so reverse-order shutdown stops work before draining persistence and closing stores. Close with a fresh deadline during shutdown. `PanicError` identifies asynchronous callback failures, atomic preparation failures, and cleanup failures; ordinary synchronous notification panics propagate unchanged.
+
+## MyGo invalidation
+
+`Invalidate`, `InvalidateSelector(With)`, and `InvalidateProjection(With)` request a frame of a MyGo window when a source publishes, when a selected value changes, or when an owned projection changes. The subscription stops when the window closes; the returned stop function is idempotent and does not wait for callbacks already running. Nil inputs and destroyed windows subscribe to nothing. `InvalidateTarget` binds the same redraw to any `InvalidationTarget`; the caller owns the target lifecycle and calls the returned stop function.
 
 ## Compatibility rule
 
