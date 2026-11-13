@@ -134,7 +134,7 @@ Scope closes observations before LIFO drains, with context cancellation at the s
 
 Each action owns a FIFO of accepted tasks, a running-work count and latest ownership per key. Canceling work does not free its slot until that run exits. Queued tasks wait on change/cancellation channels rather than polling. Queue admission excludes canceled and replaceable queued tasks; rejection leaves existing contexts intact. QueueAll never applies latest-owner rejection. With one worker, acceptance order also determines commit order; concurrent work can complete in any order.
 
-`AsyncAction.ExportMetrics` exposes aggregate action counters through the small `MetricsSink` interface. The core does not import Prometheus or OpenTelemetry; applications own the adapter and choose their metric names, labels and export lifecycle.
+`AsyncAction.ExportMetrics` exposes aggregate action counters through the small `MetricsSink` interface. Each completed run counts in exactly one of `Succeeded`, `Failed`, `Canceled` or `Superseded`, by the same rules as its terminal `TaskPhase`, so LatestWins replacement is not reported as a failure. The core does not import Prometheus or OpenTelemetry; applications own the adapter and choose their metric names, labels and export lifecycle.
 
 `SubscribeMetrics` publishes the same aggregate after terminal task accounting. Export callbacks run after task completion bookkeeping and outside action locks; callback panics are contained at the user-code boundary.
 

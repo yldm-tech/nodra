@@ -120,7 +120,7 @@ type AsyncAction[T, I, R any] struct {
 	nextMetricsID    uint64
 }
 
-// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Duration totals include each run once; Retries counts additional work attempts.
+// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Each completed run is counted in exactly one of Succeeded, Failed, Canceled or Superseded, by the same rules as its terminal TaskPhase. Duration totals include each run once; Retried counts additional work attempts.
 type ActionMetrics struct {
 	Accepted    uint64
 	Completed   uint64
@@ -131,6 +131,8 @@ type ActionMetrics struct {
 	QueuePeak   int
 	DurationSum time.Duration
 	DurationMax time.Duration
+	// Superseded counts LatestWins runs replaced by a newer run with the same key, whether they were waiting, working or about to commit. Releases up to 1.2 counted these runs as Failed.
+	Superseded uint64
 }
 
 func (a *AsyncAction[T, I, R]) Metrics() ActionMetrics {
@@ -396,11 +398,15 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	}
 	task.err = err
 	a.aggregate.Completed++
-	if err == nil {
+	// Classify with taskPhase so the aggregate agrees with the terminal phase each Task reports.
+	switch taskPhase(err) {
+	case TaskSucceeded:
 		a.aggregate.Succeeded++
-	} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrClosed) {
+	case TaskSuperseded:
+		a.aggregate.Superseded++
+	case TaskCanceled:
 		a.aggregate.Canceled++
-	} else {
+	default:
 		a.aggregate.Failed++
 	}
 	if task.attempt > 1 {
