@@ -98,10 +98,10 @@ Apps that use `mygo generate` get the bridge's service in their typed client too
 | Method | What it does |
 | --- | --- |
 | `Get(name)` | returns the current `Frame` of a state |
-| `Watch(name, after, frames)` | streams frames through a `Channel<Frame>`: the current one unless its version is `after`, then one whenever the encoded value changes, until the page closes the channel or the state goes away |
+| `Watch(name, after, frames)` | streams frames through a `Channel<Frame>`: the current one unless its version is `after` and the name was exposed only once, then one whenever the encoded value changes, until the page closes the channel or the state goes away |
 | `Dispatch(name, arg)` | runs an action with its JSON argument |
 
-A `Frame` is `{ name, version, value }`. Versions are the source's and only grow within a watch. The Go methods `Bridge.Get`, `Bridge.Watch` and `Bridge.Dispatch` do the same without MyGo, for tests and for Go code.
+A `Frame` is `{ name, version, value }`. Versions are the source's and only grow within a watch. A name exposed again may hold another source, whose versions count apart, so a watch of it sends its first frame even when the version equals `after`. The Go methods `Bridge.Get`, `Bridge.Watch` and `Bridge.Dispatch` do the same without MyGo, for tests and for Go code.
 
 ## Compatibility surface
 

@@ -520,3 +520,47 @@ func TestWatchersSeeTheFinalStateUnderConcurrentWrites(t *testing.T) {
 	cancel()
 	watches.Wait()
 }
+
+// Versions count per source, so a version the page holds from an exposure says nothing about another source exposed later under the same name.
+func TestAWatchOfANameExposedAgainSendsTheFirstFrame(t *testing.T) {
+	b := bridge.New(bridge.Options{})
+	defer b.Close()
+	docA := nodra.New(state{})
+	defer func() { _ = docA.Close() }()
+	if err := docA.Update(func(s *state) { s.Count = 111 }); err != nil {
+		t.Fatal(err)
+	}
+	stopA, err := bridge.ExposeProjection(b, "doc", docA, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFrames()
+	done := watch(ctx, b, "doc", 0, f)
+	held := f.wait(t, 1)[0]
+	stopA()
+	if err := result(t, done); !errors.Is(err, bridge.ErrClosed) {
+		t.Fatalf("the watch of a stopped exposure returned %v", err)
+	}
+
+	docB := nodra.New(state{})
+	defer func() { _ = docB.Close() }()
+	if err := docB.Update(func(s *state) { s.Count = 222 }); err != nil {
+		t.Fatal(err)
+	}
+	if docB.Version() != held.Version {
+		t.Fatalf("the test needs both sources at one version: A at %d, B at %d", held.Version, docB.Version())
+	}
+	if _, err := bridge.ExposeProjection(b, "doc", docB, project); err != nil {
+		t.Fatal(err)
+	}
+	// The page resumes as nodra.js does, from the version it holds.
+	g := newFrames()
+	done = watch(ctx, b, "doc", held.Version, g)
+	if got := g.wait(t, 1)[0]; decode[pageState](t, got).Count != 222 || got.Version != docB.Version() {
+		t.Fatalf("first frame of the name exposed again = %+v", got)
+	}
+	cancel()
+	_ = result(t, done)
+}

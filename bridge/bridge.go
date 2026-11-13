@@ -48,7 +48,7 @@ type Options struct {
 	AllowDispatch func(ctx context.Context, action string) bool
 }
 
-// Frame is a state as pages receive it: its name, the source version it was taken at and the projected value as JSON. Versions only grow; a page that already holds a version passes it to Watch to skip a frame it has.
+// Frame is a state as pages receive it: its name, the source version it was taken at and the projected value as JSON. Versions are the source's and only grow within a watch; a page that already holds a version passes it to Watch to skip a frame it has.
 type Frame struct {
 	Name    string          `json:"name"`
 	Version uint64          `json:"version"`
@@ -65,6 +65,8 @@ type Bridge struct {
 	done    chan struct{}
 	states  map[string]*exposure
 	actions map[string]*action
+	// exposed holds every name a state has been exposed under, so a later exposure under the name knows that pages may hold versions of another source.
+	exposed map[string]struct{}
 }
 
 // action is one registered action; its pointer tells a registration from a later one under the same name.
@@ -82,6 +84,8 @@ type exposure struct {
 	sourceDone <-chan struct{}
 	// stopped is closed when the exposure is stopped or the bridge closes.
 	stopped chan struct{}
+	// reused is set when the name was exposed before: versions count per source, so a version a page holds may be another source's, and Watch sends the first frame whatever after is.
+	reused bool
 }
 
 // New returns an open Bridge with nothing exposed.
@@ -91,6 +95,7 @@ func New(options Options) *Bridge {
 		done:    make(chan struct{}),
 		states:  make(map[string]*exposure),
 		actions: make(map[string]*action),
+		exposed: make(map[string]struct{}),
 	}
 	b.service = &service{bridge: b}
 	return b
@@ -153,6 +158,8 @@ func ExposeProjection[T, V any](b *Bridge, name string, source nodra.Observable[
 	if _, taken := b.states[name]; taken {
 		return nil, ErrExists
 	}
+	_, e.reused = b.exposed[name]
+	b.exposed[name] = struct{}{}
 	b.states[name] = e
 	var once sync.Once
 	return func() {
@@ -215,7 +222,7 @@ func (b *Bridge) Get(ctx context.Context, name string) (Frame, error) {
 	return Frame{Name: name, Version: version, Value: raw}, nil
 }
 
-// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
+// Watch sends the frames of the state exposed under name to send until ctx ends, the exposure stops, the source closes or the bridge closes, as the bound service's Watch does through a page's channel. The first frame is the current one, unless its version is after, which the caller already holds; versions count per source, so for a name exposed more than once, which may hold another source than the one the caller's version came from, the first frame is always sent. After that it sends a frame whenever the source publishes and the encoded projection differs from the last one sent; while send blocks, changes coalesce into the latest. It returns nil when ctx ends or send fails with mygo.ErrChannelClosed, which is how a page stops watching, and ErrClosed when the state goes away.
 func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func(Frame) error) error {
 	e, err := b.state(ctx, name)
 	if err != nil {
@@ -237,7 +244,7 @@ func (b *Bridge) Watch(ctx context.Context, name string, after uint64, send func
 		if err != nil {
 			return err
 		}
-		skip := (!first && bytes.Equal(raw, last)) || (first && after != 0 && version == after)
+		skip := (!first && bytes.Equal(raw, last)) || (first && after != 0 && version == after && !e.reused)
 		if !skip {
 			if err := send(Frame{Name: name, Version: version, Value: raw}); err != nil {
 				if errors.Is(err, mygo.ErrChannelClosed) {
