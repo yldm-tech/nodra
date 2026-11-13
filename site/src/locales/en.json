@@ -100,7 +100,7 @@
     "concurrency": "CONCURRENCY",
     "copy": "Copy",
     "copied": "Copied",
-    "footnote": "Signatures, examples and contract notes are checked against the v1.1.0 sources, and every example compiles; pkg.go.dev is authoritative.",
+    "footnote": "Signatures, examples and contract notes are checked against the v1.2.0 sources, and every example compiles; pkg.go.dev is authoritative.",
     "metaTitle": "Nodra docs · API reference",
     "metaDesc": "The method index and semantic contract of the Nodra root package: Store, selectors, atomic transactions, undo/redo, persistence, async actions and MyGo integration.",
     "ogImageAlt": "Nodra docs: the root package API reference with signatures, contracts and concurrency notes.",
