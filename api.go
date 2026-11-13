@@ -129,17 +129,17 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 	return core.AtomicUpdate(store, fn)
 }
 
-// Combine derives a value from two stores or derived values. Independent writes are eventually consistent, while Atomic2 and AtomicGroup notifications are settled through the derived graph before downstream callbacks run. Old source versions and obsolete computations cannot replace newer ones. project and equals must be pure and safe for concurrent calls, and source references must stay immutable. Close the returned value to detach both sources.
+// Combine derives a value from two stores or derived values. Atomic2 and AtomicGroup notifications are settled through the derived graph before downstream callbacks run, and over Stores, read-only views and Nodra derived values Combine projects and publishes only input pairs that some committed state contained, also while concurrent writers update the same stores and while Combine is being constructed: when one input has not yet caught up with a write the other already reflects, Combine reads both inputs again, recomputing derived inputs that are behind, instead of using the mixed pair. Independent writes are eventually consistent, and concurrent writers may see fewer intermediate values. Old source versions and obsolete computations cannot replace newer ones. project and equals must be pure and safe for concurrent calls, and source references must stay immutable; another Combine that reads this one before it has caught up with its inputs may also call project, without changing the value. Close the returned value to detach both sources.
 func Combine[A, B, V any](first Observable[A], second Observable[B], project func(A, B) V, equals func(V, V) bool) *Derived[Pair[A, B], V] {
 	return core.Combine(first, second, project, equals)
 }
 
-// Derive returns a memoized value that selector computes from source. It recomputes when source publishes and notifies its listeners only when the selected value changes according to equals; a nil equals treats every recomputation as a change. selector and equals must be pure and safe for concurrent calls, and returned reference values and listener arguments are read-only. An invalid source or a nil selector returns a closed value. Close the returned value when its owner is done.
+// Derive returns a memoized value that selector computes from source. It recomputes when source publishes and notifies its listeners only when the selected value changes according to equals; a nil equals treats every recomputation as a change. selector and equals must be pure and safe for concurrent calls, and returned reference values and listener arguments are read-only; a Combine that reads the derived value before it has caught up with source may also call selector, without changing the derived value. An invalid source or a nil selector returns a closed value. Close the returned value when its owner is done.
 func Derive[T, V any](source Observable[T], selector func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	return core.Derive(source, selector, equals)
 }
 
-// DeriveProjection is Derive over a borrowed projection: it memoizes an owned projection without cloning the whole source. project follows SubscribeProjectionWith's ownership rules, and returned reference values and listener arguments are read-only. Close the returned value when its owner is done.
+// DeriveProjection is Derive over a borrowed projection: it memoizes an owned projection without cloning the whole source. project follows SubscribeProjectionWith's ownership rules, and returned reference values and listener arguments are read-only; a Combine that reads the derived value before it has caught up with source may also call project, without changing the derived value. Close the returned value when its owner is done.
 func DeriveProjection[T, V any](source Reader[T], project func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	return core.DeriveProjection(source, project, equals)
 }
