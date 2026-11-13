@@ -11,7 +11,7 @@ var (
 	ErrNoRedo = errors.New("nodra: nothing to redo")
 )
 
-// ErrHistoryBatch reports travel without an independent publication boundary.
+// ErrHistoryBatch reports travel, or History.Clear, without an independent publication boundary: inside an open batch of the source store.
 var ErrHistoryBatch = errors.New("nodra: cannot undo or redo inside an open batch")
 
 var ErrHistoryGroup = errors.New("nodra: cannot undo or redo inside an open history group")
@@ -166,6 +166,35 @@ func (h *History[T]) Undo() error { return h.travel(true) }
 
 // Redo restores the next state.
 func (h *History[T]) Redo() error { return h.travel(false) }
+
+// Clear drops every undo and redo step and makes the store's current value the new baseline, so that after Open, New or Revert replaces the document, Undo cannot restore the previous one. Call it after the write that replaced the value; later writes are recorded against that value as usual. Status publishes the empty stacks, so InvalidateHistory and other Status subscribers follow without rebinding; Dropped does not count the cleared steps. Clear returns ErrClosed after Close or for a History that records nothing, ErrHistoryGroup while a group is open, and ErrHistoryBatch inside an open Batch of the source store, where the new value has not been published yet; each leaves the stacks unchanged. It still clears after the source store is closed. Like Undo, it must not be called from a Store update callback, a clone function or a HistoryOptions callback.
+func (h *History[T]) Clear() error {
+	if h.store == nil {
+		return ErrClosed
+	}
+	defer h.publishStatus()
+	// Hold the source lock for reading, in the store-then-history order travel uses, so that Clear is ordered with every commit: a write committed before Clear is part of the new baseline and its pending notification is obsolete, and a later write is recorded against it.
+	h.store.mu.RLock()
+	defer h.store.mu.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return ErrClosed
+	}
+	if h.groups > 0 {
+		return ErrHistoryGroup
+	}
+	if h.store.batch > 0 {
+		return ErrHistoryBatch
+	}
+	current := h.store.copy(h.store.value)
+	currentBytes := h.estimate(current)
+	// Dropping the slices releases their backing arrays, so no cleared entry keeps an old state reachable.
+	h.undo, h.redo, h.bytes = nil, nil, 0
+	h.current, h.version, h.currentBytes = current, h.store.version, currentBytes
+	h.revision++
+	return nil
+}
 
 func (h *History[T]) travel(undo bool) error {
 	if h.store == nil {

@@ -75,6 +75,12 @@ func TestRootMutationHistoryFieldAndAtomicContracts(t *testing.T) {
 	if err := history.Redo(); err != nil || first.Get() != 4 {
 		t.Fatalf("redo: %v value=%d", err, first.Get())
 	}
+	if err := history.Clear(); err != nil || history.CanUndo() || history.CanRedo() || history.Status().Get().UndoEntries != 0 || first.Get() != 4 {
+		t.Fatalf("clear: %v CanUndo=%v CanRedo=%v status %+v value=%d", err, history.CanUndo(), history.CanRedo(), history.Status().Get(), first.Get())
+	}
+	if err := history.Undo(); !errors.Is(err, nodra.ErrNoUndo) {
+		t.Fatalf("undo after clear: %v", err)
+	}
 	if err := nodra.Atomic2(first, second, func(a *int, b *int) error { *a += 1; *b += 2; return nil }); err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@
 //
 // # History
 //
-// Track and TrackWith record undo and redo. History provides Undo, Redo, CanUndo, CanRedo, BeginGroup, Status and Close. CanUndo and CanRedo are false while a group is open, and closing the tracked Store does not close its History.
+// Track and TrackWith record undo and redo. History provides Undo, Redo, CanUndo, CanRedo, BeginGroup, Clear, Status and Close. CanUndo and CanRedo are false while a group is open, Clear drops every step after the tracked Store is given a new document, and closing the tracked Store does not close its History.
 //
 // # Persistence
 //

@@ -50,6 +50,8 @@ Listeners run synchronously on the writer goroutine after the store lock is rele
 
 Undo/redo inside an open `Batch` returns `ErrHistoryBatch` without changing state or stacks. Complete the batch first: restoring state needs its own publication boundary. Closing history releases its subscription without closing the store.
 
+`Clear` empties both stacks and rebaselines history to the source's committed value and version, read under the source lock in the same store-then-history order travel uses. A write committed before `Clear` is therefore part of the baseline and its later notification is discarded as obsolete, and a write committed after it is recorded against the baseline. Inside an open `Batch` the store's value is not yet published, so `Clear` returns `ErrHistoryBatch`, and inside a group it returns `ErrHistoryGroup`; both leave the stacks unchanged. The cleared stacks and the reset byte estimate are published to the status Store with a new revision, so status subscribers such as `nativeui.InvalidateHistory` follow without rebinding. Cleared entries are not counted as dropped.
+
 ## Persistence
 
 Persistence is explicit. `Storage` owns bytes and `Codec[T]` owns encoding. `FileStorage` and `JSONCodec[T]` provide an atomic JSON file path out of the box. The core package does not assume a filesystem, JSON, database or encryption scheme. `AutoSaveWithErrors` exposes save failures through a bounded error channel; `AutoSave` is available when an application intentionally wants best-effort saving.

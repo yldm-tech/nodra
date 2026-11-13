@@ -4,6 +4,7 @@
 
 ### Features
 
+* **history:** add `History.Clear`, which drops every undo and redo step and makes the store's current value the new baseline, so after File > Open, New or Revert replaces the document Undo can no longer restore the previous one; Status publishes the empty stacks, so `nativeui.InvalidateHistory` and other Status subscribers follow without closing and re-tracking. It returns `ErrHistoryGroup` while a group is open, `ErrHistoryBatch` inside an open `Batch` and `ErrClosed` after `Close`
 * **bridge:** add `Options.FrameInterval`, the least time between two frames of one watch: changes within it coalesce into the latest, which is sent when the interval ends, and a change after a quiet spell is sent at once. Zero keeps the previous behaviour, in which a page receives every change until about 1 MiB of frames is queued; docs/bridge.md suggests a display frame for fast-changing state
 * **core:** add `Derived.Done`, closed by `Close`, so a bridge watch of a derived value ends with `ErrClosed` when the derived value closes
 * **persistence:** add `AsyncOptions.MaxWait` to bound how long continuous updates can postpone an `AutoSaveAsync` debounced write; every update restarts the trailing debounce, so a store updated more often than `Debounce` was not written until Flush or Close. Zero keeps today's unbounded behaviour, and the postponement is now documented on `AsyncOptions` and in docs/architecture.md
