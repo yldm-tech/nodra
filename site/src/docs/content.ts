@@ -103,7 +103,9 @@ func main() {
 		],
 		file: 'update_err.go',
 		code: `err := store.UpdateErr(func(state *State) error {
-	items := maps.Clone(state.Items)
+	// make, not maps.Clone: the zero State has a nil map, and a clone of nil is nil.
+	items := make(map[string]Item, len(state.Items)+1)
+	maps.Copy(items, state.Items)
 	items["word"] = updatedItem
 	state.Items = items
 	return validate(*state)
@@ -411,6 +413,10 @@ persistence := nodra.NewPersistence(store,
 	nodra.FileStorage{Path: "state.json"},
 	nodra.JSONCodec[State]{},
 )
+// Load first, or autosave overwrites state.json with the zero State.
+if err := persistence.Load(context.Background()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	return err
+}
 writer, err := persistence.AutoSaveAsync(context.Background(), nodra.AsyncOptions{Debounce: 200 * time.Millisecond})
 if err != nil {
 	return err
@@ -443,10 +449,13 @@ return scope.Close(shutdownCtx)`,
 			['InvalidateTarget', 'func InvalidateTarget[T any](source Observable[T], target InvalidationTarget) func()', '最小接口，供自定义原生宿主与测试替身使用，无需导入 MyGo。', 'Minimal interface for custom native hosts and test fakes, without importing MyGo.'],
 		],
 		file: 'window.go',
-		code: `stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
-})
-defer stop()`,
+		code: `mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws until the window closes; do not defer the returned stop here.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
+})`,
 		contract: [
 			['辅助函数会注册窗口关闭监听，并返回可重复调用的停止函数。隐藏窗口保留订阅；关闭某个窗口不会关闭 Store 或影响其他窗口。', 'Helpers register a window-close listener and return an idempotent stop. Hiding preserves subscriptions; closing one window neither closes the Store nor affects others.'],
 			['临时草稿和控件状态留在界面层自己管理，只用 Store.Update 提交真正编辑过的字段。', 'Keep transient drafts and widget state in the UI owner; commit only edited fields with Store.Update.'],
@@ -465,18 +474,24 @@ defer stop()`,
 			['nativeui.InvalidateHistory', 'func InvalidateHistory[T any](history *nodra.History[T], window *mygo.Window) (stop func())', '只在 history 开始或不再能够撤销、重做时重绘窗口，使 UndoShortcuts 注册的快捷键与「编辑」菜单跟上；history 的其他变化不触发重绘。窗口关闭或调用返回的函数时停止，可重复调用。', 'Redraws window only when history starts or stops being able to undo or redo, so the shortcuts UndoShortcuts registers and the Edit menu follow; other changes of history’s state draw nothing. It stops when the window closes or the returned function is called, and is safe to call more than once.'],
 		],
 		file: 'undo.go',
-		code: `history := nodra.Track(store, 100)
+		code: `// History lives as long as the app: close it after App.Run returns.
+history := nodra.Track(store, 100)
 defer func() { _ = history.Close() }()
 
-window := mygo.NewWindow(mygo.WindowOptions{
-	Title: "Editor",
-	Content: ui.View(func(c *ui.Context) {
-		nativeui.UndoShortcuts(c, history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
-		// ... the rest of the view
-	}),
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{
+		Title: "Editor",
+		Content: ui.View(func(c *ui.Context) {
+			nativeui.UndoShortcuts(c, history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+			// ... the rest of the view
+		}),
+	})
+	// Stops when the window closes; do not defer the returned stop here.
+	nativeui.InvalidateHistory(history, window)
 })
-stop := nativeui.InvalidateHistory(history, window)
-defer stop()`,
+if err := mygo.App.Run(); err != nil {
+	log.Fatal(err)
+}`,
 		contract: [
 			['获得焦点的文本输入框保留自己的撤销：快捷键与「编辑」菜单作用于它的文本，只在没有文本输入框获得焦点时才作用于 history。', 'A focused text input keeps its own undo: the keys and the Edit menu act on its text, and on history only while no text input has the focus.'],
 			['在 macOS 上使用 MyGo 0.7.4 时，「编辑」菜单只在撤销、重做确实会生效时启用；在 Linux 与 Windows 上快捷键先收到按键，菜单项作用于文本输入框。', 'With MyGo 0.7.4 on macOS, the Edit menu enables Undo and Redo only while they would act; on Linux and Windows the keys reach the shortcuts first, and the menu items act on text inputs.'],
@@ -501,7 +516,12 @@ defer stop()`,
 			['bridge.Client', 'var Client fs.FS', 'JavaScript 客户端 nodra.js 及其类型 nodra.d.ts，供从 Go 提供页面的应用使用；使用打包工具的应用把这两个文件复制到前端。', 'The JavaScript client nodra.js and its types nodra.d.ts, for apps that serve their pages from Go; apps with a bundler copy the two files into their frontend.'],
 		],
 		file: 'bridge.go',
-		code: `b := bridge.New(bridge.Options{})
+		code: `// Frames use encoding/json: the tag lets the page read state.count.
+type PageState struct {
+	Count int \`json:"count"\`
+}
+
+b := bridge.New(bridge.Options{})
 defer b.Close()
 
 // Pages see the count, not the token.
