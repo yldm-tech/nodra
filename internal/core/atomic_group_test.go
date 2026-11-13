@@ -2,6 +2,8 @@ package core
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -65,5 +67,50 @@ func TestAtomicGroupRejectsDuplicateStores(t *testing.T) {
 	store := New(0)
 	if err := AtomicGroup(AtomicUpdate(store, func(*int) error { return nil }), AtomicUpdate(store, func(*int) error { return nil })); err == nil {
 		t.Fatal("duplicate store accepted")
+	}
+}
+
+type retainedBox struct {
+	items []int
+	tags  map[string]int
+}
+
+func cloneRetainedBox(b retainedBox) retainedBox {
+	return retainedBox{items: slices.Clone(b.items), tags: maps.Clone(b.tags)}
+}
+
+func TestTransactionCommitsDoNotShareStateWithARetainedCandidate(t *testing.T) {
+	newStore := func() *Store[retainedBox] {
+		return NewWithClone(retainedBox{items: []int{1}, tags: map[string]int{"a": 1}}, cloneRetainedBox)
+	}
+	edit := func(retained **retainedBox) func(*retainedBox) {
+		return func(b *retainedBox) { *retained = b; b.items[0] = 2; b.tags["a"] = 2 }
+	}
+	paths := []struct {
+		name   string
+		commit func(*Store[retainedBox], func(*retainedBox)) error
+	}{
+		{"AtomicGroup", func(s *Store[retainedBox], fn func(*retainedBox)) error {
+			return AtomicGroup(AtomicUpdate(s, func(b *retainedBox) error { fn(b); return nil }))
+		}},
+		{"Atomic2", func(s *Store[retainedBox], fn func(*retainedBox)) error {
+			return Atomic2(s, New(0), func(b *retainedBox, other *int) error { fn(b); *other = 1; return nil })
+		}},
+		{"Update", func(s *Store[retainedBox], fn func(*retainedBox)) error { return s.Update(fn) }},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			store := newStore()
+			defer func() { _ = store.Close() }()
+			var retained *retainedBox
+			requireNoError(t, path.commit(store, edit(&retained)))
+			version := store.Version()
+			retained.items[0] = 99
+			retained.tags["a"] = 99
+			got := store.Get()
+			if got.items[0] != 2 || got.tags["a"] != 2 || store.Version() != version {
+				t.Fatalf("a retained candidate changed owned state: items %v tags %v version %d, want [2] map[a:2] version %d", got.items, got.tags, store.Version(), version)
+			}
+		})
 	}
 }
