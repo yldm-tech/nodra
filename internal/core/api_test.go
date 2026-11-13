@@ -127,3 +127,23 @@ func TestDerivedDoneClosesWithTheDerivedValue(t *testing.T) {
 		t.Fatal("nil derived value returned a Done channel")
 	}
 }
+
+func TestDerivedWithNilEqualsNotifiesEveryAcceptedVersion(t *testing.T) {
+	store := New(apiState{})
+	selectCount := func(s apiState) int { return s.Count }
+	unfiltered := Derive[apiState, int](store, selectCount, nil)
+	filtered := Derive[apiState, int](store, selectCount, func(a, b int) bool { return a == b })
+	defer func() { _ = unfiltered.Close(); _ = filtered.Close() }()
+	var unfilteredCalls, filteredCalls int
+	unfiltered.Subscribe(func(int) { unfilteredCalls++ })
+	filtered.Subscribe(func(int) { filteredCalls++ })
+	for _, name := range []string{"a", "b", "c"} {
+		requireNoError(t, store.Update(func(s *apiState) { s.Name = name }))
+	}
+	if unfilteredCalls != 3 || filteredCalls != 0 {
+		t.Fatalf("notifications with nil equals = %d, with equals = %d; want 3 and 0", unfilteredCalls, filteredCalls)
+	}
+	if unfiltered.Snapshot().Version != store.Version() || filtered.Snapshot().Version != store.Version() {
+		t.Fatal("derived versions did not follow the source")
+	}
+}

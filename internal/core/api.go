@@ -94,7 +94,7 @@ func selectorEqual[V any](previous, next V) bool {
 	return reflect.DeepEqual(previous, next)
 }
 
-// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes and only notifies listeners when the selected value changes. Done is closed by Close; closing a source does not close the derived value, which keeps its last value. Reference values and listener arguments remain read-only.
+// Derived is a memoized getter derived from an observable value. It recomputes when the source publishes a newer version. With an equals function it notifies listeners only when the selected value changes; with a nil equals every accepted source version replaces the value and notifies, so pass an equality function when the derived value filters changes, for example for Invalidate or the bridge. Done is closed by Close; closing a source does not close the derived value, which keeps its last value. Reference values and listener arguments remain read-only.
 type Derived[T any, V any] struct {
 	source            *Store[T]
 	selector          func(T) V

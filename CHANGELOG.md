@@ -22,6 +22,7 @@
 
 ### Documentation
 
+* **core:** state that a derived value with a nil equals function notifies on every accepted source version, and that an equality function is what filters unchanged values
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 
 ## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)
