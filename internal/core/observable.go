@@ -75,6 +75,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 	if !validObservable(first) || !validObservable(second) || project == nil {
 		return &Derived[Pair[A, B], V]{closed: true}
 	}
+	height := max(observableHeight(first), observableHeight(second)) + 1
 	a, b := first.Snapshot(), second.Snapshot()
 	var mu sync.Mutex
 	transactionID := uint64(0)
@@ -122,7 +123,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 			if transactionID == 0 {
 				fn(value)
 			} else if deferred {
-				deferTransaction(transactionID, func() {
+				deferTransaction(transactionID, height, func() {
 					mu.Lock()
 					delete(pendingTransactions, transactionID)
 					value := current
@@ -149,7 +150,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 			if transactionID == 0 {
 				fn(value)
 			} else if deferred {
-				deferTransaction(transactionID, func() {
+				deferTransaction(transactionID, height, func() {
 					mu.Lock()
 					delete(pendingTransactions, transactionID)
 					value := current
@@ -165,5 +166,5 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 		ready = true
 		return stop
 	}
-	return derive(nil, snapshot, subscribe, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals)
+	return derive(nil, snapshot, subscribe, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals, height)
 }

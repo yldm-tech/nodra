@@ -108,13 +108,16 @@ type Derived[T any, V any] struct {
 	nextID            uint64
 	stop              func()
 	closed            bool
+	height            int
 }
+
+func (d *Derived[T, V]) transactionHeight() int { return d.height }
 
 func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	if !validObservable(source) {
 		return &Derived[T, V]{closed: true}
 	}
-	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals)
+	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1)
 }
 
 // DeriveProjection memoizes an owned projection without whole-source clones. It follows SubscribeProjection's ownership contract; returned reference values and listener arguments are read-only.
@@ -123,11 +126,12 @@ func DeriveProjection[T any, V any](source Reader[T], project func(T) V, equals 
 	if store == nil {
 		return &Derived[T, V]{closed: true}
 	}
-	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals)
+	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals, 1)
 }
 
-func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool) *Derived[T, V] {
-	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V))}
+// derive builds a derived value at height, which is one more than the height of its highest source.
+func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool, height int) *Derived[T, V] {
+	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V)), height: height}
 	if selector == nil {
 		d.closed = true
 		return d
@@ -137,7 +141,8 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 	d.version = initial.Version
 	d.transactionID = initial.TransactionID
 	var pendingMu sync.Mutex
-	pendingTransactions := make(map[uint64]bool)
+	// pendingTransactions holds the newest snapshot of each transaction whose settlement is queued.
+	pendingTransactions := make(map[uint64]Snapshot[T])
 	process := func(input Snapshot[T]) {
 		d.mu.RLock()
 		stale := d.closed || input.Version <= d.version
@@ -195,19 +200,23 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 			process(input)
 			return
 		}
+		transactionID := input.TransactionID
 		pendingMu.Lock()
-		if pendingTransactions[input.TransactionID] {
+		if pending, queued := pendingTransactions[transactionID]; queued {
+			if input.Version > pending.Version {
+				pendingTransactions[transactionID] = input
+			}
 			pendingMu.Unlock()
 			return
 		}
-		pendingTransactions[input.TransactionID] = true
+		pendingTransactions[transactionID] = input
 		pendingMu.Unlock()
-		transactionID := input.TransactionID
-		deferTransaction(transactionID, func() {
+		deferTransaction(transactionID, d.height, func() {
 			pendingMu.Lock()
+			latest := pendingTransactions[transactionID]
 			delete(pendingTransactions, transactionID)
 			pendingMu.Unlock()
-			process(input)
+			process(latest)
 		})
 	}
 	d.stop = subscribe(changed)

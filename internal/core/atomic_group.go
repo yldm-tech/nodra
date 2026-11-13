@@ -135,10 +135,28 @@ func atomicGroupNamed(_ string, ops ...AtomicOp) (err error) {
 	return nil
 }
 
-// transactionDispatch keeps derived notifications inside one cross-store commit boundary. Notifications remain synchronous; callbacks registered by derived sources are drained before the boundary is considered complete.
+// transactionDispatch keeps derived notifications inside one cross-store commit boundary. Notifications remain synchronous. Callbacks deferred by derived values are drained lowest height first, so every source of a derived value settles before the value itself, and in arrival order within one height. Once a drain finds nothing left the dispatch is done, and a callback deferred after that runs at once.
 type transactionDispatch struct {
 	mu      sync.Mutex
-	pending []func()
+	pending []deferredTransaction
+	done    bool
+}
+
+type deferredTransaction struct {
+	height int
+	fn     func()
+}
+
+// transactionNode is implemented by derived values. Their height is one more than their highest source; stores, read-only views and application observables have height zero.
+type transactionNode interface {
+	transactionHeight() int
+}
+
+func observableHeight[T any](source Observable[T]) int {
+	if node, ok := source.(transactionNode); ok {
+		return node.transactionHeight()
+	}
+	return 0
 }
 
 var transactionDispatches = struct {
@@ -154,7 +172,11 @@ func beginTransactionDispatch(id uint64) *transactionDispatch {
 	return dispatch
 }
 
-func deferTransaction(id uint64, fn func()) {
+// deferTransactionLookedUp, when a test sets it, runs between finding the active dispatch and queueing on it.
+var deferTransactionLookedUp func(uint64)
+
+// deferTransaction runs fn once transaction id has settled every queued callback of a lower height, or at once when the transaction is not being dispatched.
+func deferTransaction(id uint64, height int, fn func()) {
 	if id == 0 || fn == nil {
 		if fn != nil {
 			fn()
@@ -164,18 +186,57 @@ func deferTransaction(id uint64, fn func()) {
 	transactionDispatches.Lock()
 	dispatch := transactionDispatches.active[id]
 	transactionDispatches.Unlock()
+	if deferTransactionLookedUp != nil {
+		deferTransactionLookedUp(id)
+	}
 	if dispatch == nil {
 		fn()
 		return
 	}
 	dispatch.mu.Lock()
-	dispatch.pending = append(dispatch.pending, fn)
+	if dispatch.done {
+		// The dispatcher has drained its last callback and will not look at the queue again.
+		dispatch.mu.Unlock()
+		fn()
+		return
+	}
+	dispatch.pending = append(dispatch.pending, deferredTransaction{height: height, fn: fn})
 	dispatch.mu.Unlock()
+}
+
+// next removes the queued callbacks of the lowest height, in arrival order. When nothing is queued it marks the dispatch done and returns nil.
+func (dispatch *transactionDispatch) next() []func() {
+	dispatch.mu.Lock()
+	defer dispatch.mu.Unlock()
+	if len(dispatch.pending) == 0 {
+		dispatch.done = true
+		return nil
+	}
+	lowest := dispatch.pending[0].height
+	for _, deferred := range dispatch.pending[1:] {
+		lowest = min(lowest, deferred.height)
+	}
+	var run []func()
+	rest := dispatch.pending[:0]
+	for _, deferred := range dispatch.pending {
+		if deferred.height == lowest {
+			run = append(run, deferred.fn)
+		} else {
+			rest = append(rest, deferred)
+		}
+	}
+	clear(dispatch.pending[len(rest):])
+	dispatch.pending = rest
+	return run
 }
 
 func runTransactionDispatch(id uint64, notifications []func()) {
 	dispatch := beginTransactionDispatch(id)
 	defer func() {
+		// After a notification panic nothing drains the queue any more, so later callbacks must not wait on it.
+		dispatch.mu.Lock()
+		dispatch.done = true
+		dispatch.mu.Unlock()
 		transactionDispatches.Lock()
 		delete(transactionDispatches.active, id)
 		transactionDispatches.Unlock()
@@ -183,15 +244,8 @@ func runTransactionDispatch(id uint64, notifications []func()) {
 	for _, notification := range notifications {
 		notification()
 	}
-	for {
-		dispatch.mu.Lock()
-		pending := dispatch.pending
-		dispatch.pending = nil
-		dispatch.mu.Unlock()
-		if len(pending) == 0 {
-			return
-		}
-		for _, callback := range pending {
+	for run := dispatch.next(); run != nil; run = dispatch.next() {
+		for _, callback := range run {
 			callback()
 		}
 	}
