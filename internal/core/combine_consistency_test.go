@@ -451,7 +451,7 @@ func TestCombineValuesOnlyMoveForwardWithVersion(t *testing.T) {
 		return v
 	}
 	dx := Derive[int, int](x, slowIdentity, nil)
-	defer dx.Close()
+	defer func() { _ = dx.Close() }()
 	combines := map[string]*Derived[Pair[int, int], Pair[int, int]]{
 		"Combine(x, y)":         Combine(x, y, pairOf, nil),
 		"Combine(Derive(x), y)": Combine[int, int, Pair[int, int]](dx, y, pairOf, nil),
@@ -459,7 +459,7 @@ func TestCombineValuesOnlyMoveForwardWithVersion(t *testing.T) {
 	var mu sync.Mutex
 	delivered := make(map[string][]Snapshot[Pair[int, int]])
 	for name, c := range combines {
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		c.SubscribeSnapshot(func(s Snapshot[Pair[int, int]]) {
 			mu.Lock()
 			delivered[name] = append(delivered[name], s)
@@ -535,8 +535,8 @@ func TestCombineOverAnObservableWithChangingVersionsReturns(t *testing.T) {
 		t.Fatal("Combine over an Observable whose version changes on every Snapshot did not return")
 	}
 	inner, outer := combines[0], combines[1]
-	defer inner.Close()
-	defer outer.Close()
+	defer func() { _ = inner.Close() }()
+	defer func() { _ = outer.Close() }()
 	if got := inner.Get(); got != 3 {
 		t.Fatalf("Combine = %d, want 3", got)
 	}
