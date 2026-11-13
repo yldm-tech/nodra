@@ -29,7 +29,7 @@ export interface RemoteState<T> {
   getError(): unknown;
   /** Whether a frame arrived. */
   hasValue(): boolean;
-  /** Calls listener after every frame and when the watch fails. Each call is its own subscription, even for a listener already subscribed, and its function ends only that one. The first subscriber starts the watch; the last one to unsubscribe stops it. */
+  /** Calls listener after every frame and when the watch fails. Each call is its own subscription, even for a listener already subscribed, and its function ends only that one. An error a listener throws is reported as uncaught, with reportError where the page has it, and does not keep the other listeners from being called. The first subscriber starts the watch; the last one to unsubscribe stops it. */
   subscribe(listener: () => void): () => void;
   /** Resolves with the value once one arrived, and rejects when the watch fails first. */
   ready(): Promise<T>;

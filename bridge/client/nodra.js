@@ -14,6 +14,17 @@ function serviceOf(options) {
   return options?.service ?? DEFAULT_SERVICE;
 }
 
+// Reports a listener's error as an uncaught one without unwinding the caller, as MyGo's runtime does for its own callbacks, so one failing listener cannot keep the others from a frame or a failure.
+function report(error) {
+  if (typeof globalThis.reportError === "function") {
+    globalThis.reportError(error);
+  } else {
+    setTimeout(() => {
+      throw error;
+    });
+  }
+}
+
 /**
  * Follows the state Go exposes under name. Nothing is asked of Go until the first listener subscribes; the watch stops when the last one unsubscribes, and the next subscriber starts it again from the version the page holds. subscribe and getSnapshot fit React's useSyncExternalStore: the snapshot is the same object until a new frame arrives.
  */
@@ -30,7 +41,13 @@ export function remoteState(name, options = {}) {
   let generation = 0;
 
   const notify = () => {
-    for (const entry of [...listeners]) entry.listener();
+    for (const entry of [...listeners]) {
+      try {
+        entry.listener();
+      } catch (error) {
+        report(error);
+      }
+    }
   };
 
   function start() {

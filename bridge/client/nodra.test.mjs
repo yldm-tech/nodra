@@ -156,3 +156,49 @@ test("each subscription is its own, even with the same listener", () => {
   b();
   assert.equal(runtime.watches[0].channel.closed, true);
 });
+
+// reportErrors stands in for the page's error reporting while fn runs.
+async function reportErrors(fn) {
+  const reported = [];
+  const had = Object.hasOwn(globalThis, "reportError");
+  const previous = globalThis.reportError;
+  globalThis.reportError = (error) => reported.push(error);
+  try {
+    await fn();
+  } finally {
+    if (had) globalThis.reportError = previous;
+    else delete globalThis.reportError;
+  }
+  return reported;
+}
+
+test("a listener that throws does not keep the others from a frame", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  const bug = new Error("widget bug");
+  let second = 0;
+  const reported = await reportErrors(async () => {
+    state.subscribe(() => { throw bug; });
+    state.subscribe(() => second++);
+    const ready = state.ready();
+    runtime.watches[0].send({ name: "s", version: 1, value: 1 });
+    assert.equal(second, 1, "the second listener missed the frame");
+    assert.equal(await ready, 1);
+  });
+  assert.deepEqual(reported, [bug]);
+});
+
+test("a listener that throws does not keep the others from the watch's failure", async () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  const bug = new Error("widget bug");
+  let second = 0;
+  const reported = await reportErrors(async () => {
+    state.subscribe(() => { throw bug; });
+    state.subscribe(() => second++);
+    runtime.watches[0].reject(new Error("nodra bridge: closed"));
+    await flush();
+  });
+  assert.equal(second, 1, "the second listener missed the failure");
+  assert.deepEqual(reported, [bug]);
+});
