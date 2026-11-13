@@ -2,6 +2,8 @@ package core
 
 import (
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -104,7 +106,8 @@ func TestHistoryClearRejections(t *testing.T) {
 		requireNoError(t, store.Set(1))
 		end, err := history.BeginGroup()
 		requireNoError(t, err)
-		if err := history.Clear(); !errors.Is(err, ErrHistoryGroup) {
+		// The shared sentinels name Clear, so a logged rejection does not claim the caller tried to undo or redo.
+		if err := history.Clear(); !errors.Is(err, ErrHistoryGroup) || !strings.Contains(err.Error(), "clear") {
 			t.Fatalf("clear inside group error = %v", err)
 		}
 		end()
@@ -119,7 +122,7 @@ func TestHistoryClearRejections(t *testing.T) {
 		requireNoError(t, store.Set(1))
 		requireNoError(t, store.BatchErr(func() error {
 			requireNoError(t, store.Set(2))
-			if err := history.Clear(); !errors.Is(err, ErrHistoryBatch) {
+			if err := history.Clear(); !errors.Is(err, ErrHistoryBatch) || !strings.Contains(err.Error(), "clear") {
 				t.Fatalf("clear inside batch error = %v", err)
 			}
 			return nil
@@ -158,5 +161,94 @@ func TestHistoryClearAfterSourceStoreCloses(t *testing.T) {
 	requireNoError(t, history.Clear())
 	if state := history.Status().Get(); state.UndoEntries != 0 || state.CanUndo || state.Closed {
 		t.Fatalf("status after clear of a closed source: %+v", state)
+	}
+}
+
+// TestHistoryClearConcurrentWithWritersAndTravel runs Clear alongside store writers, Undo, Redo, groups and batches. Clear reads the store's value, version and batch depth under the source read lock; under -race this test fails if that lock is removed. Once the goroutines finish, a quiescent Clear must leave empty stacks and a zero byte estimate, and the next write must be recorded against the store's value at that point.
+func TestHistoryClearConcurrentWithWritersAndTravel(t *testing.T) {
+	store := New(0)
+	history := TrackWith(store, HistoryOptions[int]{Limit: 50, MaxBytes: 1 << 20, Size: func(int) int64 { return 8 }})
+	defer func() { _ = history.Close() }()
+	busy := func(err error) bool {
+		return err == nil || errors.Is(err, ErrHistoryBatch) || errors.Is(err, ErrHistoryGroup)
+	}
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Go(func() {
+			for range 200 {
+				if err := store.Update(func(v *int) { *v++ }); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+	wg.Go(func() {
+		for i := range 200 {
+			var err error
+			if i%2 == 0 {
+				if err = history.Undo(); errors.Is(err, ErrNoUndo) {
+					err = nil
+				}
+			} else if err = history.Redo(); errors.Is(err, ErrNoRedo) {
+				err = nil
+			}
+			if !busy(err) {
+				t.Errorf("travel error = %v", err)
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 200 {
+			if err := history.Clear(); !busy(err) {
+				t.Errorf("clear error = %v", err)
+			}
+		}
+	})
+	wg.Go(func() {
+		for range 100 {
+			end, err := history.BeginGroup()
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			if err := store.Update(func(v *int) { *v += 2 }); err != nil {
+				t.Error(err)
+			}
+			end()
+		}
+	})
+	wg.Go(func() {
+		for range 100 {
+			err := store.BatchErr(func() error {
+				if err := store.Update(func(v *int) { *v += 3 }); err != nil {
+					return err
+				}
+				// The batch's write is not published yet, so Clear must refuse it here whatever the other goroutines are doing.
+				if err := history.Clear(); err == nil || !busy(err) {
+					t.Errorf("clear inside batch error = %v", err)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	wg.Wait()
+	requireNoError(t, history.Clear())
+	if state := history.Status().Get(); state.UndoEntries != 0 || state.RedoEntries != 0 || state.Bytes != 0 || state.CanUndo || state.CanRedo {
+		t.Fatalf("status after a quiescent clear: %+v", state)
+	}
+	baseline := store.Get()
+	requireNoError(t, store.Update(func(v *int) { *v++ }))
+	if state := history.Status().Get(); state.UndoEntries != 1 || state.Bytes != 8 {
+		t.Fatalf("status after recording again: %+v", state)
+	}
+	requireNoError(t, history.Undo())
+	if got := store.Get(); got != baseline {
+		t.Fatalf("undo after clear restored %d, want the baseline %d", got, baseline)
+	}
+	if err := history.Undo(); !errors.Is(err, ErrNoUndo) {
+		t.Fatalf("second undo after clear error = %v", err)
 	}
 }

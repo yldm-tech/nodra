@@ -11,10 +11,11 @@ var (
 	ErrNoRedo = errors.New("nodra: nothing to redo")
 )
 
-// ErrHistoryBatch reports travel, or History.Clear, without an independent publication boundary: inside an open batch of the source store.
-var ErrHistoryBatch = errors.New("nodra: cannot undo or redo inside an open batch")
+// ErrHistoryBatch reports Undo, Redo or Clear without an independent publication boundary: inside an open batch of the source store.
+var ErrHistoryBatch = errors.New("nodra: cannot undo, redo or clear history inside an open batch")
 
-var ErrHistoryGroup = errors.New("nodra: cannot undo or redo inside an open history group")
+// ErrHistoryGroup reports Undo, Redo or Clear while a history group from BeginGroup is open.
+var ErrHistoryGroup = errors.New("nodra: cannot undo, redo or clear history inside an open history group")
 var ErrInvalidHistory = errors.New("nodra: invalid history size configuration")
 
 // HistoryOptions configures recording. Equals excludes changes to irrelevant fields. Restore merges recorded fields into current state so ignored fields survive travel. Both functions must be pure, must not mutate arguments, and must not reenter the Store or History; they can run while those locks are held. With nil callbacks, every publication records and travel replaces the whole value.
