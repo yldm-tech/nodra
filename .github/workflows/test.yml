@@ -16,24 +16,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: candidate
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.base.sha || (github.ref == 'refs/heads/main' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'main' }}
-          path: baseline
-      - name: Resolve latest published API baseline
-        id: released
+          # History and tags, so a branch push can find what it was branched from.
+          fetch-depth: 0
+      - name: Resolve API baselines
+        id: bases
         env:
           GH_TOKEN: ${{ github.token }}
+          DEFAULT_BASE: ${{ github.event.pull_request.base.sha || (github.ref == 'refs/heads/main' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'main' }}
         run: |
+          base=$DEFAULT_BASE
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          # A pull_request run checks the branch merged into main, but a push to another branch checks the branch as it is. Compared with main's tip or the latest release, an API added on main after the branch was cut would read as removed, so compare such a push with its merge base with main and the latest release it contains.
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" != refs/heads/main ]]; then
+            base=$(git -C candidate merge-base HEAD origin/main)
+            tag=$(git -C candidate describe --tags --abbrev=0 --match 'v[0-9]*' HEAD)
+          fi
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::invalid published API baseline: $tag"
             exit 1
           fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: refs/tags/${{ steps.released.outputs.tag }}
+          ref: ${{ steps.bases.outputs.base }}
+          path: baseline
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ steps.bases.outputs.tag }}
           path: released
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
