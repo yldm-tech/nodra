@@ -19,6 +19,7 @@
 ### Documentation
 
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
+* state in docs/architecture.md and the Go docs that `SubscribeMetrics` callbacks are not covered by `Task.Wait` or `AsyncAction.Close` and can run after unsubscribing, and that `Metrics` read after `Close` is the final aggregate
 
 ## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)
 

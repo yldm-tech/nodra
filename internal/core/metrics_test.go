@@ -107,3 +107,26 @@ func TestActionMetricsDoNotCountSupersededRunsAsFailed(t *testing.T) {
 		t.Fatalf("metrics = %+v", metrics)
 	}
 }
+
+func TestActionMetricsAreFinalWhenCloseReturns(t *testing.T) {
+	entered := make(chan struct{})
+	action, err := NewAsyncAction(New(0), "load", func(ctx context.Context, _ int, _ func(float64)) (int, error) {
+		close(entered)
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}, func(*int, int) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := action.Run(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if err := action.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// SubscribeMetrics callbacks may still be pending here, but the aggregate already includes the run Close canceled.
+	if metrics := action.Metrics(); metrics.Accepted != 1 || metrics.Completed != 1 || metrics.Canceled != 1 || metrics.Failed != 0 {
+		t.Fatalf("metrics after Close = %+v", metrics)
+	}
+}

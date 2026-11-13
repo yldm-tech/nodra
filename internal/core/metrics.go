@@ -19,7 +19,7 @@ func (a *AsyncAction[T, I, R]) ExportMetrics(sink MetricsSink) error {
 	return nil
 }
 
-// SubscribeMetrics observes aggregate metrics after each terminal task. The callback runs outside the action lock and is protected from panics so an exporter cannot strand a task or terminate the worker goroutine. The returned function is idempotent.
+// SubscribeMetrics observes aggregate metrics after each terminal task. The callback runs outside the action lock and is protected from panics so an exporter cannot strand a task or terminate the worker goroutine. It runs after the task is done, so it can still be invoked after that task's Wait, the action's Close or the returned function has returned, and snapshots from concurrent tasks can arrive out of order; read Metrics or call ExportMetrics after Close for the final aggregate. The returned function is idempotent.
 func (a *AsyncAction[T, I, R]) SubscribeMetrics(fn func(ActionMetrics)) func() {
 	if a == nil || fn == nil {
 		return func() {}

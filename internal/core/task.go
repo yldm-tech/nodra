@@ -54,7 +54,7 @@ type AsyncState struct {
 	Revision uint64
 }
 
-// Task is one run of an AsyncAction. Cancel requests cooperative cancellation; Wait waits for work and its completion notifications, independently of the waiter's context. Do not Wait from the task's own work, hooks or synchronous subscribers.
+// Task is one run of an AsyncAction. Cancel requests cooperative cancellation; Wait waits for work and its completion notifications (action hooks and status updates, not SubscribeMetrics callbacks), independently of the waiter's context. Do not Wait from the task's own work, hooks or synchronous subscribers.
 type Task struct {
 	ID             uint64
 	ctx            context.Context
