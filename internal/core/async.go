@@ -263,7 +263,7 @@ func (a *AsyncPersistence[T]) run() {
 			if err == nil {
 				a.hasSaved, a.saved = true, max(a.saved, version)
 			}
-			// With a Debounce, updates made during this save go back through the outer loop and waitDebounce, using the wake token request left buffered, so slow storage cannot turn Debounce and MaxWait into back-to-back writes. A zero Debounce or a waiting Flush or Close would also write them at once by that route, because waitDebounce returns immediately for both; continuing here keeps the direct follow-up write those cases already had and skips a trip through the outer select, which could otherwise pick ctx.Done or store.done first. No test distinguishes the two routes.
+			// With a Debounce, updates made during this save go back through the outer loop and waitDebounce, using the wake token request left buffered, so slow storage cannot turn Debounce and MaxWait into back-to-back writes. A zero Debounce or a waiting Flush or Close writes them here at once, as before, without a trip through the outer select, which could pick ctx.Done or store.done first.
 			again := a.options.Debounce == 0 || a.force
 			a.changedLocked()
 			a.mu.Unlock()
