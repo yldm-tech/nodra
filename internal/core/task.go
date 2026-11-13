@@ -120,7 +120,7 @@ type AsyncAction[T, I, R any] struct {
 	nextMetricsID    uint64
 }
 
-// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Each completed run is counted in exactly one of Succeeded, Failed, Canceled or Superseded, by the same rules as its terminal TaskPhase. Duration totals include each run once; Retried counts additional work attempts.
+// ActionMetrics aggregates terminal outcomes for one AsyncAction without retaining completed Task values. Each completed run is counted in exactly one of Succeeded, Failed, Canceled or Superseded, matching the terminal TaskPhase its Task publishes, including TaskFailed when the terminal status update itself fails. Duration totals include each run once; Retried counts additional work attempts.
 type ActionMetrics struct {
 	Accepted    uint64
 	Completed   uint64
@@ -365,11 +365,13 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	if hookErr := taskBoundary(func() error { a.store.finishAction(event, hooks, err); return nil }); hookErr != nil {
 		err = errors.Join(err, hookErr)
 	}
+	// phase is the terminal phase the Task publishes; the aggregate below counts the run under the same value.
+	phase := taskPhase(err)
 	// Status failures cannot strand a task or prevent Close from releasing it.
 	if statusErr := taskBoundary(func() error {
 		return a.status(task, func(s *AsyncState) {
 			s.Running = false
-			s.Phase = taskPhase(err)
+			s.Phase = phase
 			if err == nil {
 				s.Progress = 1
 			} else {
@@ -378,6 +380,7 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 		})
 	}); statusErr != nil && !errors.Is(statusErr, ErrClosed) {
 		err = errors.Join(err, statusErr)
+		phase = TaskFailed
 		_ = taskBoundary(func() error {
 			return a.status(task, func(s *AsyncState) { s.Running = false; s.Phase = TaskFailed; s.Error = err.Error() })
 		})
@@ -398,8 +401,8 @@ func (a *AsyncAction[T, I, R]) run(task *Task, input I, initErr error) {
 	}
 	task.err = err
 	a.aggregate.Completed++
-	// Classify with taskPhase so the aggregate agrees with the terminal phase each Task reports.
-	switch taskPhase(err) {
+	// Count the phase the Task published, including the TaskFailed fallback after a failed status update, so the aggregate agrees with Task.Status.
+	switch phase {
 	case TaskSucceeded:
 		a.aggregate.Succeeded++
 	case TaskSuperseded:

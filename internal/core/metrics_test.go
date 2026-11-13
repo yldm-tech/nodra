@@ -108,6 +108,53 @@ func TestActionMetricsDoNotCountSupersededRunsAsFailed(t *testing.T) {
 	}
 }
 
+func TestActionMetricsFollowPublishedPhaseWhenTerminalStatusFails(t *testing.T) {
+	gate, entered := make(chan struct{}), make(chan struct{}, 2)
+	action, err := NewAsyncAction(New(0), "search", func(ctx context.Context, query int, _ func(float64)) (int, error) {
+		entered <- struct{}{}
+		if query == 1 {
+			<-ctx.Done()
+			return 0, ctx.Err()
+		}
+		<-gate
+		return query, nil
+	}, func(s *int, v int) error { *s = v; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = action.Close(context.Background()) }()
+	first, err := action.Run(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	// A panicking status subscriber makes the terminal status update fail, so the task falls back to publishing TaskFailed.
+	first.Status().Subscribe(func(s Snapshot[AsyncState]) {
+		if s.Value.Phase == TaskSuperseded {
+			panic("observer")
+		}
+	})
+	second, err := action.Run(context.Background(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Wait(context.Background()); !errors.Is(err, ErrSuperseded) {
+		t.Fatalf("first run = %v", err)
+	}
+	if phase := first.Status().Get().Phase; phase != TaskFailed {
+		t.Fatalf("first phase = %v, want %v", phase, TaskFailed)
+	}
+	<-entered
+	close(gate)
+	if err := second.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	metrics := action.Metrics()
+	if metrics.Completed != 2 || metrics.Succeeded != 1 || metrics.Failed != 1 || metrics.Canceled != 0 || metrics.Superseded != 0 {
+		t.Fatalf("metrics = %+v, want the first run in Failed to match its published phase", metrics)
+	}
+}
+
 func TestActionMetricsAreFinalWhenCloseReturns(t *testing.T) {
 	entered := make(chan struct{})
 	action, err := NewAsyncAction(New(0), "load", func(ctx context.Context, _ int, _ func(float64)) (int, error) {
