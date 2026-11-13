@@ -43,6 +43,23 @@
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 * state in docs/architecture.md and the Go docs that `SubscribeMetrics` callbacks are not covered by `Task.Wait` or `AsyncAction.Close` and can run after unsubscribing, and that `Metrics` read after `Close` is the final aggregate
 
+## [1.3.0](https://github.com/yldm-tech/nodra/compare/v1.2.0...v1.3.0) (2026-11-13)
+
+
+### Features
+
+* add the nodra_nomygo build tag to build without MyGo ([#107](https://github.com/yldm-tech/nodra/issues/107)) ([6d0609e](https://github.com/yldm-tech/nodra/commit/6d0609eb18d9e6b911fc5a0ce9a0ee5ec966d77b))
+* **persistence:** bound AutoSaveAsync debounce with MaxWait and fix journal, Windows durability, recovery and worker panic bugs ([#103](https://github.com/yldm-tech/nodra/issues/103)) ([88900fa](https://github.com/yldm-tech/nodra/commit/88900fa786dc8a9acf2a40823884d37313ccb0cf))
+
+
+### Bug Fixes
+
+* **async:** bound retry backoff, count superseded runs, and contain late Observe panics ([#104](https://github.com/yldm-tech/nodra/issues/104)) ([eb32678](https://github.com/yldm-tech/nodra/commit/eb32678dcb4de87f535bce8ddea5a9e5da79af6d))
+* **bridge:** close audit findings in the bridge and its JavaScript client ([#105](https://github.com/yldm-tech/nodra/issues/105)) ([f55a935](https://github.com/yldm-tech/nodra/commit/f55a93593b6ce9e56f3a78b52acd5f1fc3b88cf3))
+* **core:** make transactions, batches and derived values settle consistently ([#101](https://github.com/yldm-tech/nodra/issues/101)) ([1052dd9](https://github.com/yldm-tech/nodra/commit/1052dd9dceed76c806c0ec44b2e6facbdbfc0736))
+* **devtools:** fix search, export copies, redaction and restore size limits ([#106](https://github.com/yldm-tech/nodra/issues/106)) ([97b8f00](https://github.com/yldm-tech/nodra/commit/97b8f0010f50ae1d3a17e3a888ed1bf7afd28850))
+* **history:** align CanUndo/CanRedo with HistoryState and document store-close ownership ([#102](https://github.com/yldm-tech/nodra/issues/102)) ([d74070a](https://github.com/yldm-tech/nodra/commit/d74070aa32c9fdbac40df7ef7d4178455772efe9))
+
 ## [1.2.0](https://github.com/yldm-tech/nodra/compare/v1.1.0...v1.2.0) (2026-11-06)
 
 
