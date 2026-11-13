@@ -72,7 +72,7 @@ inspector := devtools.New(devtools.Options{
 })
 ```
 
-Redact runs before JSON is retained, including both previous/current mutation values, initial state and catch-up snapshots. It must be concurrency-safe and return valid JSON. A state-redacted inspector is always read-only so masked state can never be restored.
+Redact runs before JSON is retained, including both previous/current mutation values, initial state and catch-up snapshots. It must be concurrency-safe and return valid JSON. A state-redacted inspector is always read-only so masked state can never be restored. A redactor that panics does not reach the Store write or Attach that triggered it: that state is not retained, the store is marked non-restorable, and the inspection error is the fixed text `state redaction failed`; the panic value is discarded because it may contain the state being redacted. A later successful redaction recovers.
 
 Use `RedactMetadata` alongside the state filter when names, task keys or error text may be sensitive:
 

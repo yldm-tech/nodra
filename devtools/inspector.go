@@ -40,7 +40,8 @@ type Options struct {
 	// RequestsPerSecond limits authenticated API requests in a fixed one-second window. Zero disables the limit.
 	RequestsPerSecond int
 	AllowRestore      bool
-	Redact            func(storeID string, state json.RawMessage) (json.RawMessage, error)
+	// Redact filters each encoded state before retention. A returned error or a panic does not reach the Store write or Attach that triggered it: the state is not retained, the store is not restorable, and the inspection error is the callback's error or, for a panic, the fixed text "state redaction failed" (the panic value is discarded).
+	Redact func(storeID string, state json.RawMessage) (json.RawMessage, error)
 	// RedactMetadata filters names, task keys and error text before retention, including snapshots and pending progress. It must be concurrency-safe. Failure or panic discards all original metadata and records a fixed diagnostic. Store IDs are application-supplied public labels and are not filtered.
 	RedactMetadata func(storeID string, metadata Metadata) (Metadata, error)
 }
