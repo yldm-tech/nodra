@@ -100,7 +100,7 @@
     "concurrency": "並行性",
     "copy": "コピー",
     "copied": "コピーしました",
-    "footnote": "Signatures, examples and contract notes are checked against the v1.1.0 sources, and every example compiles; pkg.go.dev is authoritative.",
+    "footnote": "Signatures, examples and contract notes are checked against the v1.2.0 sources, and every example compiles; pkg.go.dev is authoritative.",
     "metaTitle": "Nodra ドキュメント · API リファレンス",
     "metaDesc": "Nodra ルートパッケージのメソッド索引と意味論。",
     "ogImageAlt": "Nodra docs: the root package API reference with signatures, contracts and concurrency notes.",

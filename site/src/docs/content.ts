@@ -1,7 +1,7 @@
 import type { Lang } from '../lib/lang';
 import { LOCALES } from '../lib/i18n';
 
-// API reference for the root package. Signatures, contract notes and examples were checked against the v1.1.0 sources (api.go, internal/core, devtools, docs/architecture.md); every example compiles against the module.
+// API reference for the root package and its optional subpackages devtools, bridge and nativeui. Signatures, contract notes and examples were checked against the v1.2.0 sources (api.go, internal/core, devtools, bridge, nativeui, docs/architecture.md, docs/bridge.md); every example compiles against the module.
 
 type Pair = [zh: string, en: string];
 
@@ -39,8 +39,8 @@ export const SECTIONS: DocSection[] = [
 		lead: ['Nodra 是面向 Go 桌面应用的并发安全响应式状态库。它为 MyGo 应用提供类似 Zustand 的使用体验，同时让状态独立于渲染器和持久化后端。', 'Nodra is a concurrency-safe reactive state store for Go desktop applications. It brings Zustand-like ergonomics to MyGo apps while keeping state independent from the renderer and persistence backend.'],
 		contract: [
 			['唯一受支持的导入路径是 github.com/yldm-tech/nodra；根包重新导出 internal/core 的实现类型，应用无需了解仓库布局。', 'The supported import path is github.com/yldm-tech/nodra. The root package re-exports implementation types from internal/core, so applications need no knowledge of the repository layout.'],
-			['可选的检查器位于 github.com/yldm-tech/nodra/devtools，核心包不依赖它。', 'The optional inspector lives in github.com/yldm-tech/nodra/devtools; the core does not import it.'],
-			['需要 Go 1.27.3 或更新版本；原生集成基于 MyGo v0.7.2。', 'Requires Go 1.27.3 or newer; native integration targets MyGo v0.7.2.'],
+			['可选的子包：github.com/yldm-tech/nodra/devtools 是检查器，bridge 让 MyGo 应用的网页跟随 Store，nativeui 让原生 UI 的撤销与重做作用于 History。核心包不依赖它们。', 'Optional subpackages: github.com/yldm-tech/nodra/devtools is the inspector, bridge lets the web pages of a MyGo app follow a Store, and nativeui makes the Undo and Redo of native UI act on a History. The core imports none of them.'],
+			['需要 Go 1.27.3 或更新版本；原生集成基于 MyGo v0.7.4。', 'Requires Go 1.27.3 or newer; native integration targets MyGo v0.7.4.'],
 		],
 	},
 	{
@@ -381,9 +381,37 @@ if err == nil {
 		methods: [
 			['NewScope', 'func NewScope() *Scope', '没有隐式的全局注册表，也不拥有共享 store。', 'No implicit global registry and no ownership of shared stores.'],
 			['Context', 'func (s *Scope) Context() context.Context', '关闭开始时被取消。', 'Canceled at the start of shutdown.'],
+			['Observe', 'func (s *Scope) Observe(stop func()) error', '登记一个取消订阅函数，Close 时在所有清理之前按后进先出的顺序调用；不等待正在执行的回调。关闭开始后登记的函数会立即调用并返回 ErrClosed；nil 会被忽略。', 'Owns an unsubscribe function, which Close calls in LIFO order before any drain; callbacks already running are not awaited. One registered after shutdown begins is called immediately and returns ErrClosed; nil is ignored.'],
+			['Defer', 'func (s *Scope) Defer(cleanup func(context.Context) error) error', '登记一个带上下文的清理，Close 时以第一次 Close 的上下文按后进先出的顺序运行，panic 转为 PanicError。关闭开始后登记的清理立即以同一上下文运行，返回 ErrClosed 与清理自身的错误。清理必须响应取消，且不得同步关闭自己所属的 Scope。', 'Registers a context-aware drain, which Close runs in LIFO order with the first Close’s context; a panic becomes a PanicError. One registered after shutdown begins runs immediately with that context and returns ErrClosed joined with its own error. Drains must respect cancellation and must not synchronously Close their own Scope.'],
+			['Done', 'func (s *Scope) Done() <-chan struct{}', '所有观察停止、所有清理运行完毕后关闭。', 'Closed once every observation has stopped and every drain has run.'],
 			['Close', 'func (s *Scope) Close(ctx context.Context) error', '第一次 Close 只运行一次清理；其他调用方等待同一完成通道或各自的 context。', 'The first Close runs cleanup once; other callers wait on one completion channel or their own context.'],
 		],
+		file: 'scope.go',
+		code: `scope := nodra.NewScope()
+store := nodra.New(State{})
+if err := scope.Defer(func(context.Context) error { return store.Close() }); err != nil {
+	return err
+}
+
+persistence := nodra.NewPersistence(store,
+	nodra.FileStorage{Path: "state.json"},
+	nodra.JSONCodec[State]{},
+)
+writer, err := persistence.AutoSaveAsync(context.Background(), nodra.AsyncOptions{Debounce: 200 * time.Millisecond})
+if err != nil {
+	return err
+}
+_ = scope.Defer(writer.Close) // LIFO: flushes before the store closes
+
+_ = scope.Observe(store.Subscribe(func(s nodra.Snapshot[State]) {
+	log.Printf("v%d count=%d", s.Version, s.Value.Count)
+}))
+
+shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+return scope.Close(shutdownCtx)`,
 		contract: [
+			['先登记 store，再登记持久化，最后登记动作，这样后进先出的关闭会先停下工作，再排空持久化，最后关闭 store。', 'Register stores first, persistence second and actions last, so reverse-order shutdown stops work before persistence drains and stores close.'],
 			['关闭时请使用新的截止时间；需要刷新数据的持久化写入应使用独立于 Scope.Context 的上下文。', 'Close with a fresh deadline; persistence workers that must flush should use a context independent of Scope.Context.'],
 			['关闭后注册的观察会立即停止；迟到的排空收到第一次的关闭上下文并返回 ErrClosed。', 'Late observations stop immediately; late drains receive the first shutdown context and return ErrClosed.'],
 		],
@@ -409,6 +437,81 @@ defer stop()`,
 			['临时草稿和控件状态留在界面层自己管理，只用 Store.Update 提交真正编辑过的字段。', 'Keep transient drafts and widget state in the UI owner; commit only edited fields with Store.Update.'],
 		],
 		concurrency: ['订阅和选择器运行在写入者 goroutine 中，Window.Invalidate 会安全地把帧请求投递到主线程。其他由界面自身产生的变化仍需 Window.Update。', 'Subscriptions and selectors run on writer goroutines; Window.Invalidate safely posts the frame request to the main thread. Other UI-owned changes still require Window.Update.'],
+	},
+	{
+		id: 'nativeui',
+		group: 'integ',
+		title: ['原生撤销与重做', 'Native undo & redo'],
+		lead: ['可选的 nativeui 子包让 MyGo 原生 UI 窗口的撤销、重做快捷键与「编辑」菜单作用于 History。它与核心包分开，不使用原生 UI 的应用不会链接 MyGo 的 ui 包。', 'The optional nativeui subpackage makes the Undo and Redo shortcuts and Edit menu of a MyGo native UI window act on a History. It is separate from the core, so apps without native UI do not link MyGo’s ui package.'],
+		methods: [
+			['nativeui.UndoShortcuts', 'func UndoShortcuts[T any](c *ui.Context, history *nodra.History[T])', '在正在构建的视图中注册快捷键：可以撤销时 Cmd+Z（Linux 与 Windows 上为 Ctrl+Z）撤销；可以重做时 Shift+Cmd+Z 重做，Windows 上 Ctrl+Y 也可以。请在窗口视图的顶层、子元素的构建函数之外调用，使快捷键作用于整个窗口。', 'Registers shortcuts in the view being built: while history can undo, Cmd+Z (Ctrl+Z on Linux and Windows) undoes; while it can redo, Shift+Cmd+Z redoes, and Ctrl+Y too on Windows. Call it at the top level of the window’s view, outside the builders of child elements, so the shortcuts serve the whole window.'],
+			['nativeui.InvalidateHistory', 'func InvalidateHistory[T any](history *nodra.History[T], window *mygo.Window) (stop func())', '只在 history 开始或不再能够撤销、重做时重绘窗口，使 UndoShortcuts 注册的快捷键与「编辑」菜单跟上；history 的其他变化不触发重绘。窗口关闭或调用返回的函数时停止，可重复调用。', 'Redraws window only when history starts or stops being able to undo or redo, so the shortcuts UndoShortcuts registers and the Edit menu follow; other changes of history’s state draw nothing. It stops when the window closes or the returned function is called, and is safe to call more than once.'],
+		],
+		file: 'undo.go',
+		code: `history := nodra.Track(store, 100)
+defer func() { _ = history.Close() }()
+
+window := mygo.NewWindow(mygo.WindowOptions{
+	Title: "Editor",
+	Content: ui.View(func(c *ui.Context) {
+		nativeui.UndoShortcuts(c, history) // Cmd+Z, Shift+Cmd+Z and the Edit menu
+		// ... the rest of the view
+	}),
+})
+stop := nativeui.InvalidateHistory(history, window)
+defer stop()`,
+		contract: [
+			['获得焦点的文本输入框保留自己的撤销：快捷键与「编辑」菜单作用于它的文本，只在没有文本输入框获得焦点时才作用于 history。', 'A focused text input keeps its own undo: the keys and the Edit menu act on its text, and on history only while no text input has the focus.'],
+			['在 macOS 上使用 MyGo 0.7.4 时，「编辑」菜单只在撤销、重做确实会生效时启用；在 Linux 与 Windows 上快捷键先收到按键，菜单项作用于文本输入框。', 'With MyGo 0.7.4 on macOS, the Edit menu enables Undo and Redo only while they would act; on Linux and Windows the keys reach the shortcuts first, and the menu items act on text inputs.'],
+			['被 history 拒绝的撤销或重做（例如帧构建之后才开始的分组）什么也不做。', 'An Undo or Redo that history refuses, because a group began after the frame was built, does nothing.'],
+		],
+		concurrency: ['快捷键在主线程上运行，撤销与重做因此在主线程上发布：做慢操作的 Store 订阅者应把工作移到其他 goroutine。', 'The shortcuts run on the main thread, so Undo and Redo publish there: a store subscriber that does slow work should move it to another goroutine.'],
+	},
+	{
+		id: 'bridge',
+		group: 'integ',
+		title: ['网页桥接', 'Web pages'],
+		lead: ['可选的 bridge 子包让 MyGo 应用的网页跟随 Store，并通过 Go 注册的动作修改它，Go 中的同一个 Store 因此是原生窗口与网页共同的唯一数据源。网页只看到 Go 暴露的值，从不直接写入状态。', 'The optional bridge subpackage lets the web pages of a MyGo app follow a Store and change it through actions Go registers, so one Store in Go is the source of truth for native windows and web pages alike. Pages see only what Go exposes and never write state directly.'],
+		methods: [
+			['bridge.New', 'func New(options Options) *Bridge', '返回一个尚未暴露任何内容的已打开 Bridge。Options.AllowRead 与 AllowDispatch 按状态名和动作名进一步限制可以调用的页面；为 nil 时允许 MyGo 允许的所有页面。', 'Returns an open Bridge with nothing exposed. Options.AllowRead and AllowDispatch narrow, per state and action name, which pages may call; nil allows every page MyGo lets call.'],
+			['bridge.Expose', 'func Expose[T any](b *Bridge, name string, source nodra.Observable[T]) (stop func(), err error)', '原样暴露 source：值必须能编码为 JSON，编码包含的每个字段都会到达网页。返回的停止函数结束网页对它的 watch，可重复调用。', 'Exposes source as it is: its value must encode as JSON, and every field the encoding includes reaches the pages. The returned stop ends the pages’ watches of it and is safe to call more than once.'],
+			['bridge.ExposeProjection', 'func ExposeProjection[T, V any](b *Bridge, name string, source nodra.Observable[T], project func(T) V) (stop func(), err error)', '网页只看到 project 的返回值，密钥和大型内部数据留在 Go 中；只有编码后的投影变化时网页才收到新帧。', 'Pages see only what project returns, so secrets and large internals stay in Go; a page receives a frame only when the encoded projection changes.'],
+			['bridge.Handle', 'func Handle[A any](b *Bridge, name string, handle func(ctx context.Context, arg A) error) (stop func(), err error)', '注册网页可以派发的动作：JSON 参数解码为 A，缺失或为 null 时取零值；ctx 在网页离开或窗口关闭时取消，handle 返回的错误使网页的 promise 被拒绝。', 'Registers an action pages may dispatch: the JSON argument decodes into an A, a missing or null one into its zero value; ctx is canceled when the page navigates away or its window closes, and the error handle returns rejects the page’s promise.'],
+			['Bridge.Bind / BindAs', 'func (b *Bridge) Bind()', '以 DefaultService（Nodra）的名称绑定服务；BindAs(name) 使用其他名称。与 mygo.Bind 一样必须在 App.Run 之前调用，名称已被占用时 panic。', 'Binds the service under DefaultService (Nodra); BindAs(name) uses another name. Like mygo.Bind it must run before App.Run, and it panics when the name is taken.'],
+			['Bridge.Get / Watch / Dispatch', 'func (b *Bridge) Get(ctx context.Context, name string) (Frame, error)', '与绑定的服务为网页所做的相同，但不需要 MyGo，供测试和 Go 代码使用。', 'Do what the bound service does for a page, without MyGo, for tests and Go code.'],
+			['Bridge.Close', 'func (b *Bridge) Close()', '停止所有暴露，以 ErrClosed 结束网页的 watch，之后的调用返回 ErrClosed。source 保持打开：它们归应用所有。可重复调用。', 'Stops every exposure, ending the pages’ watches with ErrClosed, and makes later calls fail with ErrClosed. Sources stay open: the app owns them. Safe to call more than once.'],
+			['Frame', 'type Frame struct{ Name string; Version uint64; Value json.RawMessage }', '网页收到的状态：名称、取值时 source 的版本号，以及 JSON 编码的投影值。版本号只增不减。', 'A state as pages receive it: its name, the source version it was taken at and the projected value as JSON. Versions only grow.'],
+			['bridge.Client', 'var Client fs.FS', 'JavaScript 客户端 nodra.js 及其类型 nodra.d.ts，供从 Go 提供页面的应用使用；使用打包工具的应用把这两个文件复制到前端。', 'The JavaScript client nodra.js and its types nodra.d.ts, for apps that serve their pages from Go; apps with a bundler copy the two files into their frontend.'],
+		],
+		file: 'bridge.go',
+		code: `b := bridge.New(bridge.Options{})
+defer b.Close()
+
+// Pages see the count, not the token.
+stop, err := bridge.ExposeProjection(b, "counter", store, func(s State) PageState {
+	return PageState{Count: s.Count}
+})
+if err != nil {
+	return err
+}
+defer stop()
+
+stopAdd, err := bridge.Handle(b, "counter/add", func(ctx context.Context, by int) error {
+	return store.Update(func(s *State) { s.Count += by })
+})
+if err != nil {
+	return err
+}
+defer stopAdd()
+
+b.Bind() // before App.Run`,
+		contract: [
+			['一次 watch 先发送当前帧（版本号等于网页已持有的 after 时跳过），之后只在编码后的投影变化时发送；网页处理较慢时，期间的变化合并为最新的一帧。', 'A watch sends the current frame first, unless its version is the after the page already holds, then a frame only when the encoded projection changes; while a page is slow, changes coalesce into the latest.'],
+			['MyGo 只允许应用自己的页面调用绑定的服务。被 AllowRead 或 AllowDispatch 拒绝的调用返回 ErrDenied，未暴露或未注册的名称返回 ErrNotFound，重复使用的名称返回 ErrExists。', 'MyGo lets only the app’s own pages call bound services. A call refused by AllowRead or AllowDispatch fails with ErrDenied, a name nothing is exposed or registered under with ErrNotFound, and a name used twice with ErrExists.'],
+			['JavaScript 客户端 bridge/client/nodra.js 没有依赖：remoteState(name) 的 subscribe 与 getSnapshot 适配 React 的 useSyncExternalStore，dispatch(name, arg) 派发动作。', 'The JavaScript client bridge/client/nodra.js has no dependencies: remoteState(name) has subscribe and getSnapshot for React’s useSyncExternalStore, and dispatch(name, arg) dispatches an action.'],
+			['bridge 的 Go API、服务的方法名与参数以及 Frame 的 JSON 字段属于 v1 契约，可以新增字段。', 'The bridge Go API, the service’s method names and arguments, and the Frame JSON fields are part of the v1 contract; fields may be added.'],
+		],
+		concurrency: ['project 在每个网页的 watch goroutine 上运行，可能同时为多个网页运行：它必须是纯函数、并发安全，并把 source 的引用值视为只读。动作在派发调用的 goroutine 上运行，通过应用的 Store 修改状态，因此历史、持久化与 DevTools 照常看到变化。AllowRead 与 AllowDispatch 必须并发安全。', 'project runs on the goroutine of each page’s watch, possibly for several pages at once: it must be pure, concurrency-safe and treat the source’s reference values as read-only. Handlers run on the dispatching call’s goroutine and change state through the app’s stores, so history, persistence and DevTools see the change as usual. AllowRead and AllowDispatch must be concurrency-safe.'],
 	},
 	{
 		id: 'devtools',
