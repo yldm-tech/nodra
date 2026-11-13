@@ -287,7 +287,7 @@ func TestConcurrentCaptureAndCloseReleaseSubscriptions(t *testing.T) {
 }
 
 func TestConcurrentRestoreNeverTargetsReplacementStore(t *testing.T) {
-	// With one P the Restore loop below never blocks, so the test goroutine only runs again after async preemption, about 10 ms at each of its steps, and the test took about a minute. Yielding there costs nothing in coverage: with one P the calls cannot overlap the detach and reattach anyway. With more Ps the loop must not yield, because a yield lets the scheduler run the test goroutine on the loop's P and the calls stop overlapping it.
+	// With one P the Restore loop below never blocks, so the test goroutine only runs again after async preemption, about 10 ms at each of its steps, and the test took about a minute. Yielding there costs little coverage: with one P the calls overlap the detach and reattach only when preemption lands inside Restore's unlocked window between reading the store and applying to it, which the original loop did not hit in practice. With more Ps the loop must not yield, because a yield lets the scheduler run the test goroutine on the loop's P and the calls stop overlapping it.
 	yield := runtime.GOMAXPROCS(0) == 1
 	for range 2000 {
 		inspector := New(Options{AllowRestore: true})

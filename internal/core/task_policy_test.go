@@ -247,16 +247,24 @@ func TestProgressTraceOvertakenByTheTerminalStatusIsDropped(t *testing.T) {
 	var traces []ActionTrace
 	store.SubscribeActionTrace(func(event ActionTrace) { mu.Lock(); traces = append(traces, event); mu.Unlock() })
 	held, release, reported := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	action, err := NewAsyncAction(store, "overtaken", func(_ context.Context, _ int, report func(float64)) (int, error) {
+	action, err := NewAsyncAction(store, "overtaken", func(ctx context.Context, _ int, report func(float64)) (int, error) {
 		go func() {
 			defer close(reported)
 			report(.5)
 		}()
-		<-held
+		// Watch ctx so that a regression which never delivers the held report fails the test instead of hanging the deferred Close.
+		select {
+		case <-held:
+		case <-ctx.Done():
+			return 0, context.Cause(ctx)
+		}
 		return 1, nil
 	}, func(s *int, v int) error { *s = v; return nil })
 	requireNoError(t, err)
 	defer func() { _ = action.Close(context.Background()) }()
+	// Runs before Close on every exit path, so a failure while the subscriber holds the report cannot leave the task waiting on it.
+	free := sync.OnceFunc(func() { close(release) })
+	defer free()
 	var hold sync.Once
 	stop := action.Status().Subscribe(func(snapshot Snapshot[AsyncState]) {
 		if snapshot.Value.Running && snapshot.Value.Progress == .5 {
@@ -267,7 +275,7 @@ func TestProgressTraceOvertakenByTheTerminalStatusIsDropped(t *testing.T) {
 	task, err := action.Run(context.Background(), 0)
 	requireNoError(t, err)
 	requireNoError(t, waitTask(t, task))
-	close(release)
+	free()
 	select {
 	case <-reported:
 	case <-time.After(5 * time.Second):
