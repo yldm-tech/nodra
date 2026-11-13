@@ -73,15 +73,13 @@ func (p *Persistence[T]) Load(ctx context.Context) error {
 	return p.load(ctx, false)
 }
 
-// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation, a closed Store and an invalid configuration detected before reading stop before attempting the backup.
+// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation, a closed Store and an invalid configuration stop before attempting the backup. An invalid configuration is ErrInvalidPersistence returned by Persistence itself, by a storage read (such as an empty FileStorage path or a symlinked CheckedFileStorage primary), or unwrapped by a codec (such as a nil AESGCMCodec key ring or a VersionedJSONCodec Version below 1). A decode or validate error that wraps ErrInvalidPersistence with more context, such as a damaged VersionedJSONCodec envelope, describes damaged data and falls back to the backup.
 func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
 	primary := p.Load(ctx)
 	if primary == nil {
 		return nil
 	}
-	// Codecs and storages also wrap ErrInvalidPersistence for damaged data, such as a malformed version envelope. Those failures arrive as a LoadError and must fall back to the backup; only a configuration error returned before any read is final.
-	var loadErr *LoadError
-	if (errors.Is(primary, ErrInvalidPersistence) && !errors.As(primary, &loadErr)) || errors.Is(primary, context.Canceled) || errors.Is(primary, context.DeadlineExceeded) || errors.Is(primary, ErrClosed) {
+	if isInvalidPersistenceConfiguration(primary) || errors.Is(primary, context.Canceled) || errors.Is(primary, context.DeadlineExceeded) || errors.Is(primary, ErrClosed) {
 		return primary
 	}
 	if ctx != nil {
@@ -94,6 +92,18 @@ func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
 		return nil
 	}
 	return &RecoveryError{Primary: primary, Backup: backup}
+}
+
+// isInvalidPersistenceConfiguration reports whether a primary load error means the persistence setup is unusable rather than the stored bytes are damaged. Storages and codecs reject their configuration with the bare sentinel, and every read-stage ErrInvalidPersistence is a storage configuration or policy rejection; only decode and validate errors that wrap the sentinel with context describe the data.
+func isInvalidPersistenceConfiguration(err error) bool {
+	if !errors.Is(err, ErrInvalidPersistence) {
+		return false
+	}
+	var loadErr *LoadError
+	if !errors.As(err, &loadErr) {
+		return true
+	}
+	return loadErr.Err == ErrInvalidPersistence || (loadErr.Stage != "decode" && loadErr.Stage != "validate")
 }
 
 // LoadBackup explicitly restores validated backup state to memory. It never rewrites the primary file, so a corrupt original remains available for diagnosis. Call before starting autosave; a later Save intentionally writes the current state to disk.
