@@ -303,18 +303,21 @@ func (d *Derived[T, V]) Close() error {
 		return ErrClosed
 	}
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.closed {
+		d.mu.Unlock()
 		return ErrClosed
 	}
 	d.closed = true
-	if d.stop != nil {
-		d.stop()
-	}
+	stop := d.stop
 	d.listeners = nil
 	d.snapshotListeners = nil
 	if d.done != nil {
 		close(d.done)
+	}
+	d.mu.Unlock()
+	// Unsubscribe without the derived lock: a Store's unsubscribe takes the store lock, which an update holds while its callback may read this value. A notification that arrives meanwhile sees closed and is dropped.
+	if stop != nil {
+		stop()
 	}
 	return nil
 }

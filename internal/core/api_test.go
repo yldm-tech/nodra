@@ -2,7 +2,9 @@ package core
 
 import (
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 )
 
 type apiState struct {
@@ -146,4 +148,87 @@ func TestDerivedWithNilEqualsNotifiesEveryAcceptedVersion(t *testing.T) {
 	if unfiltered.Snapshot().Version != store.Version() || filtered.Snapshot().Version != store.Version() {
 		t.Fatal("derived versions did not follow the source")
 	}
+}
+
+// lockedObservable is a source whose unsubscribe takes the same lock a writer holds while it runs user code, as a Store's unsubscribe takes the store lock that Update holds during its callback.
+type lockedObservable struct {
+	mu       sync.Mutex
+	stopping chan struct{}
+}
+
+func (o *lockedObservable) Snapshot() Snapshot[int] { return Snapshot[int]{Value: 1, Version: 1} }
+
+func (o *lockedObservable) SubscribeSnapshot(func(Snapshot[int])) func() {
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(o.stopping)
+			o.mu.Lock()
+			o.mu.Unlock()
+		})
+	}
+}
+
+func TestDerivedCloseDoesNotHoldItsLockWhileUnsubscribing(t *testing.T) {
+	source := &lockedObservable{stopping: make(chan struct{})}
+	derived := Derive[int, int](source, func(v int) int { return v * 2 }, nil)
+	// The writer holds the source lock, waits until Close is unsubscribing, and then reads the derived value, like an Update callback that reads a value derived from its store.
+	source.mu.Lock()
+	read := make(chan int, 1)
+	go func() {
+		defer source.mu.Unlock()
+		<-source.stopping
+		read <- derived.Get()
+	}()
+	closed := make(chan error, 1)
+	go func() { closed <- derived.Close() }()
+	select {
+	case got := <-read:
+		if got != 2 {
+			t.Fatalf("Get during Close = %d, want 2", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: Close holds the derived lock while unsubscribing, and the writer holds the source lock while reading the derived value")
+	}
+	requireNoError(t, <-closed)
+	select {
+	case <-derived.Done():
+	default:
+		t.Fatal("Done did not close with Close")
+	}
+}
+
+func TestDerivedCloseRacingAnUpdateThatReadsIt(t *testing.T) {
+	// No deferred store.Close: on a deadlock the store lock stays held, and a deferred Close would hang the test binary instead of failing the test.
+	store := New(1)
+	doubled := Derive[int, int](store, func(v int) int { return v * 2 }, nil)
+	entered, proceed, updated := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		updated <- store.Update(func(v *int) {
+			close(entered)
+			<-proceed
+			*v = doubled.Get() + 1
+		})
+	}()
+	<-entered
+	closed := make(chan error, 1)
+	go func() { closed <- doubled.Close() }()
+	// Close marks the value closed before it unsubscribes, so Done shows it has released the derived lock or is about to wait for the store lock.
+	select {
+	case <-doubled.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: Close is waiting for the store lock while it holds the derived lock")
+	}
+	close(proceed)
+	select {
+	case err := <-updated:
+		requireNoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: the update cannot read the derived value while Close holds it")
+	}
+	requireNoError(t, <-closed)
+	if got := store.Get(); got != 3 {
+		t.Fatalf("store = %d, want 3", got)
+	}
+	requireNoError(t, store.Close())
 }
