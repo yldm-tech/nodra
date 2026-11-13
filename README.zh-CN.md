@@ -64,6 +64,8 @@ func (app *App) view(c *ui.Context) {
 
 可选的 `nativeui` 子包让窗口的撤销和重做作用于 `History`：快捷键，以及 MyGo 0.7.4 起 macOS 上 Edit 菜单里的对应项，只在历史可以撤销或重做时启用。聚焦的文本框保留自己的撤销。它独立于核心包，没有原生 UI 的应用不会因此链接 MyGo 的 `ui` 包。
 
+只共享 Store、从不打开窗口的服务和命令行工具可以用 `-tags nodra_nomygo` 构建。它去掉接收 `*mygo.Window` 的辅助函数（`InvalidateTarget` 保留），因此不会链接 MyGo，`CGO_ENABLED=0` 的 Linux 构建就是静态可执行文件。这个标签作用于整个构建：`nativeui` 以及任何调用这些辅助函数的库在该标签下无法编译，`bridge` 会重新链接 MyGo。详见 [`docs/support.md`](docs/support.md)。
+
 ## 网页
 
 ```go

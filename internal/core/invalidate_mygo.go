@@ -4,7 +4,7 @@ package core
 
 import "github.com/egoist/mygo"
 
-// These helpers take a *mygo.Window, so they are the only part of the package that imports MyGo. Building with the nodra_nomygo tag leaves them out; InvalidateTarget and bindInvalidation stay available.
+// These helpers take a *mygo.Window, so they are the only part of the package that imports MyGo. Building with the nodra_nomygo tag leaves them out; InvalidateTarget stays available. bindInvalidation stays untagged for its unit tests, but has no other callers under the tag.
 
 // InvalidateProjection requests frames only when an owned projection changes, without cloning the entire source. The projector and callbacks follow SubscribeProjection's ownership rules. The window owns the subscription lifetime.
 func InvalidateProjection[T, V any](source Reader[T], window *mygo.Window, project func(T) V) func() {
