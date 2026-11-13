@@ -137,3 +137,31 @@ func BenchmarkIncrementalIdlePoll(b *testing.B) {
 		i.Changes(snapshot.Revision, snapshot.Cursor, 50)
 	}
 }
+
+func TestExportsCopyCustomEventData(t *testing.T) {
+	i := New(Options{})
+	defer func() { _ = i.Close() }()
+	mustAttach(t, i, "store", nodra.New(0))
+	const original = `{"a":1}`
+	mustUpdate(t, i.Record("store", CustomEvent{Kind: "diagnostic", Data: json.RawMessage(original)}))
+	retained := func() string {
+		t.Helper()
+		events := i.Snapshot().Events
+		return string(events[len(events)-1].Data)
+	}
+	snapshot := i.Snapshot()
+	copy(snapshot.Events[len(snapshot.Events)-1].Data, "XXXXXXX")
+	if got := retained(); got != original {
+		t.Fatalf("Snapshot shares Data with retained history: %q", got)
+	}
+	changes := i.Changes(0, 0, 50)
+	copy(changes.Events[len(changes.Events)-1].Data, "YYYYYYY")
+	if got := retained(); got != original {
+		t.Fatalf("Changes shares Data with retained history: %q", got)
+	}
+	page := i.EventsBefore(0, 50)
+	copy(page.Events[len(page.Events)-1].Data, "ZZZZZZZ")
+	if got := retained(); got != original {
+		t.Fatalf("EventsBefore shares Data with retained history: %q", got)
+	}
+}

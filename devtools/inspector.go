@@ -479,8 +479,7 @@ func (i *Inspector) Snapshot() Snapshot {
 	}
 	sort.Slice(result.Stores, func(a, b int) bool { return result.Stores[a].ID < result.Stores[b].ID })
 	for n, event := range i.events {
-		event.State, event.Previous = bytes.Clone(event.State), bytes.Clone(event.Previous)
-		result.Events[n] = event
+		result.Events[n] = copyEvent(event)
 	}
 	return result
 }
