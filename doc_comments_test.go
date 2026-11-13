@@ -31,13 +31,18 @@ func readText(t *testing.T, path string) string {
 	return strings.ReplaceAll(string(data), "\r\n", "\n")
 }
 
-// rootFunctions returns the doc comment of every exported function declared in api.go, keyed by name.
+// rootFunctionFiles hold the root package's exported functions; api_mygo.go has the MyGo helpers that the nodra_nomygo tag leaves out, and is parsed from disk whatever the build tags.
+var rootFunctionFiles = []string{"api.go", "api_mygo.go"}
+
+// rootFunctions returns the doc comment of every exported function declared in rootFunctionFiles, keyed by name.
 func rootFunctions(t *testing.T) map[string]string {
 	t.Helper()
 	functions := map[string]string{}
-	for _, decl := range parseGoFile(t, "api.go").Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() {
-			functions[fn.Name.Name] = fn.Doc.Text()
+	for _, file := range rootFunctionFiles {
+		for _, decl := range parseGoFile(t, file).Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() {
+				functions[fn.Name.Name] = fn.Doc.Text()
+			}
 		}
 	}
 	if len(functions) == 0 {
@@ -70,9 +75,11 @@ func TestRootFunctionsHaveDocComments(t *testing.T) {
 			}
 		}
 	}
-	for _, decl := range parseGoFile(t, filepath.Join("internal", "core", "invalidate.go")).Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() && !strings.HasPrefix(fn.Doc.Text(), fn.Name.Name+" ") {
-			t.Errorf("internal/core/invalidate.go: %s has no doc comment", fn.Name.Name)
+	for _, file := range []string{"invalidate.go", "invalidate_mygo.go"} {
+		for _, decl := range parseGoFile(t, filepath.Join("internal", "core", file)).Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() && !strings.HasPrefix(fn.Doc.Text(), fn.Name.Name+" ") {
+				t.Errorf("internal/core/%s: %s has no doc comment", file, fn.Name.Name)
+			}
 		}
 	}
 }
