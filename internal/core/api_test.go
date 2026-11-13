@@ -154,6 +154,7 @@ func TestDerivedWithNilEqualsNotifiesEveryAcceptedVersion(t *testing.T) {
 type lockedObservable struct {
 	mu       sync.Mutex
 	stopping chan struct{}
+	stopped  bool
 }
 
 func (o *lockedObservable) Snapshot() Snapshot[int] { return Snapshot[int]{Value: 1, Version: 1} }
@@ -164,6 +165,7 @@ func (o *lockedObservable) SubscribeSnapshot(func(Snapshot[int])) func() {
 		once.Do(func() {
 			close(o.stopping)
 			o.mu.Lock()
+			o.stopped = true
 			o.mu.Unlock()
 		})
 	}
@@ -222,7 +224,9 @@ func TestDerivedCloseRacingAnUpdateThatReadsIt(t *testing.T) {
 	}()
 	fail := func(msg string) {
 		close(abort)
-		<-updated
+		if err := <-updated; err != nil {
+			t.Errorf("update after abort: %v", err)
+		}
 		t.Fatal(msg)
 	}
 	<-entered
