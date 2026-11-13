@@ -1,6 +1,9 @@
 package core
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // Select reads an owned projection and source version without cloning the whole Store. project borrows read-only state under the read lock: it must not mutate or retain source references, reenter the Store, or block. Return scalars or copy all mutable references in the projection (for example with slices.Clone). Existing Get and SubscribeSelector keep their full-state isolation policy.
 func Select[T, V any](source Reader[T], project func(T) V) Snapshot[V] {
@@ -45,4 +48,21 @@ func (store *Store[T]) subscribeBorrowed(fn func(Snapshot[T])) func() {
 	store.listeners[id] = listener[T]{fn: fn, borrowed: true}
 	var once sync.Once
 	return func() { once.Do(func() { store.mu.Lock(); delete(store.listeners, id); store.mu.Unlock() }) }
+}
+
+// subscribeVersions serves helpers that use a publication only as a change signal, such as autosave and redraw requests. It borrows the snapshot, so a NewWithClone store does not clone the whole state for a listener that throws it away, and it drops a notification no newer than one already delivered, as Subscribe does.
+func (store *Store[T]) subscribeVersions(fn func(version uint64)) func() {
+	var latest atomic.Uint64
+	return store.subscribeBorrowed(func(snapshot Snapshot[T]) {
+		for {
+			seen := latest.Load()
+			if snapshot.Version <= seen {
+				return
+			}
+			if latest.CompareAndSwap(seen, snapshot.Version) {
+				fn(snapshot.Version)
+				return
+			}
+		}
+	})
 }

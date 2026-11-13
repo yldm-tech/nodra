@@ -66,7 +66,7 @@ func (p *Persistence[T]) AutoSaveAsync(ctx context.Context, options AsyncOptions
 		errors: make(chan error, 8), changed: make(chan struct{}), closeDone: make(chan struct{}),
 		state: New(PersistenceState{Pending: true}),
 	}
-	a.unsubscribe = p.store.Subscribe(func(snapshot Snapshot[T]) { a.request(snapshot.Version) })
+	a.unsubscribe = p.store.subscribeVersions(a.request)
 	a.request(p.store.Version())
 	go a.run()
 	return a, nil

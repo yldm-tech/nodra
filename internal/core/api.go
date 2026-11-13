@@ -27,7 +27,7 @@ func SubscribeSelectorWith[T any, V any](source Observable[T], selector func(T) 
 func subscribeSelection[T, V any](snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, fn func(current, previous V), options SelectorOptions[V]) func() {
 	compare := options.Equals
 	if compare == nil {
-		compare = selectorEqual[V]
+		compare = selectorEqualFor[V]()
 	}
 	var mu sync.Mutex
 	initial := snapshot()
@@ -83,6 +83,31 @@ func subscribeSelection[T, V any](snapshot func() Snapshot[T], subscribe func(fu
 	changed(snapshot())
 	initialized = true
 	return stop
+}
+
+// selectorEqualFor chooses the default selector equality once per subscription. A comparable type that cannot hold an interface value can never hold a non-comparable dynamic value, so selectorEqual would always take its == branch for it; such types compare with == directly and skip the per-call reflection. Every other type keeps selectorEqual.
+func selectorEqualFor[V any]() func(previous, next V) bool {
+	if t := reflect.TypeFor[V](); t.Comparable() && !holdsInterface(t) {
+		return func(previous, next V) bool { return any(previous) == any(next) }
+	}
+	return selectorEqual[V]
+}
+
+// holdsInterface reports whether a value of t can contain an interface value inline, through struct fields or array elements. Pointers, channels and other reference kinds compare by identity, so their targets do not matter.
+func holdsInterface(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Interface:
+		return true
+	case reflect.Array:
+		return holdsInterface(t.Elem())
+	case reflect.Struct:
+		for i := range t.NumField() {
+			if holdsInterface(t.Field(i).Type) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // selectorEqual preserves == semantics when dynamic values are comparable too. Interfaces and structs containing interfaces can hold slices/maps at runtime.
