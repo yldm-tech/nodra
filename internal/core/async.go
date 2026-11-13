@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge delay for bursts of updates; zero starts immediately. Every update restarts the delay, so updates that keep arriving more often than Debounce postpone the write until they pause, or until Flush or Close, unless MaxWait is set. Flush bypasses the delay.
+// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge delay for bursts of updates; zero starts immediately. Every update restarts the delay, so updates that keep arriving more often than Debounce postpone the write until they pause, or until Flush or Close, unless MaxWait is set. Updates made while a write runs wait for the delay counted from when that write returns. Flush bypasses the delay.
 type AsyncOptions struct {
 	Debounce time.Duration
 	// MaxWait bounds how long continuous updates can postpone a debounced write. The worker starts writing the latest state at most MaxWait after it begins waiting for pending changes, even if updates continue; a shorter MaxWait than Debounce caps the delay itself. Zero keeps the delay unbounded, negative values are invalid, and it has no effect when Debounce is zero.
@@ -263,6 +263,8 @@ func (a *AsyncPersistence[T]) run() {
 			if err == nil {
 				a.hasSaved, a.saved = true, max(a.saved, version)
 			}
+			// Updates made during this save go back through waitDebounce, whose wake token request left buffered, so slow storage cannot turn Debounce and MaxWait into back-to-back writes. Only a waiting Flush or Close, or a zero Debounce, writes them at once.
+			again := a.options.Debounce == 0 || a.force
 			a.changedLocked()
 			a.mu.Unlock()
 			a.publishStatus()
@@ -271,6 +273,9 @@ func (a *AsyncPersistence[T]) run() {
 				case a.errors <- err:
 				default:
 				}
+				break
+			}
+			if !again {
 				break
 			}
 		}
