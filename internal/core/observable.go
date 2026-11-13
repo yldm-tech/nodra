@@ -70,14 +70,14 @@ type Pair[A, B any] struct {
 	Second B
 }
 
-// Combine derives a value from two stores or derived values. Atomic2 and AtomicGroup transaction notifications are settled through the derived graph before downstream callbacks run, and Combine projects and publishes only input pairs that some committed state contained, also while concurrent writers update the same stores and while Combine is being constructed: when one input has not yet caught up with a write the other already reflects, Combine reads both inputs again, recomputing derived inputs that are behind, instead of using the mixed pair. Independent writes are eventually consistent, and concurrent writers may see fewer intermediate values. This covers Stores, ReadOnly views and Nodra derived values; an application Observable counts as a source of height zero, so one that forwards a derived value is not settled after it, and Combine checks a pair that includes one only against its other input. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable.
+// Combine derives a value from two stores or derived values. Atomic2 and AtomicGroup transaction notifications are settled through the derived graph before downstream callbacks run, and Combine projects and publishes only input pairs that some committed state contained, also while concurrent writers update the same stores and while Combine is being constructed: when one input has not yet caught up with a write the other already reflects, Combine reads both inputs again, recomputing derived inputs that are behind, instead of using the mixed pair. Independent writes are eventually consistent, and concurrent writers may see fewer intermediate values. This covers Stores, ReadOnly views and Nodra derived values; an application Observable counts as a source of height zero, so one that forwards a derived value is not settled after it, and Combine checks a pair that includes one only against its other input, so a write that reaches the application Observable between Combine's reads of its two inputs can still give a mixed pair. Old source versions and obsolete computations cannot replace newer ones. Close the returned derived value to detach both sources. Projectors/comparators must be pure, concurrency-safe and keep source references immutable; another Combine that reads this one before it has caught up with its inputs may also call the projector, without changing the value.
 func Combine[A, B, V any](first Observable[A], second Observable[B], project func(A, B) V, equals func(V, V) bool) *Derived[Pair[A, B], V] {
 	if !validObservable(first) || !validObservable(second) || project == nil {
 		return closedDerived[Pair[A, B], V]()
 	}
 	height := max(observableHeight(first), observableHeight(second)) + 1
 	firstLinks, secondLinks := linksOf(first), linksOf(second)
-	// read returns a pair both inputs held at one moment: each input was still current after both were read, so it held its value from before the other was read until then. own reports which values are the inputs' own rather than recomputed, and current whether each value is still current.
+	// read returns a pair both inputs held at one moment: each input was still current after both were read, so it held its value from before the other was read until then. An application Observable cannot tell and counts as current, so a pair that includes one is checked only against the other input, and read never waits for its version to hold still. own reports which values are the inputs' own rather than recomputed, and current whether each value is still current.
 	read := func() (firstValue Snapshot[A], secondValue Snapshot[B], own [2]bool, current [2]func() bool) {
 		for {
 			firstValue, own[0], current[0] = firstLinks.read()
@@ -102,7 +102,8 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 		}
 		return firstCurrent() && secondCurrent()
 	}
-	var mu sync.Mutex
+	// mu guards the state below. publishMu orders publishes and is taken before mu, never while holding it.
+	var mu, publishMu sync.Mutex
 	transactionID := uint64(0)
 	if a.TransactionID != 0 && a.TransactionID == b.TransactionID {
 		transactionID = a.TransactionID
@@ -148,12 +149,14 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 				stop()
 			}
 		}()
-		// publish hands the newest pair downstream when both inputs still hold it. Otherwise one input has not caught up with a write the other may already reflect, so publish reads a pair both inputs hold now instead; the input still catching up later notifies a value that is already published, or none when equals filters it.
+		// publish hands the newest pair downstream when both inputs still hold it. Otherwise one input has not caught up with a write the other may already reflect, so publish reads a pair both inputs hold now instead; the input still catching up later notifies a value that is already published, or none when equals filters it. publishMu serializes the check or read with the update of published, so a higher version always carries a pair checked or read later, and a publisher that finds the published pair still current compares it with the newest one: two publishers cannot finish in the opposite order and leave an older pair at the higher version. It is released before fn; the derived value drops a delivery that arrives after a newer one.
 		publish := func(transactionID uint64) {
+			publishMu.Lock()
 			mu.Lock()
 			stillPublished := publishedCurrent
 			if pairVersion == published.Version {
 				mu.Unlock()
+				publishMu.Unlock()
 				return
 			}
 			candidate := Snapshot[Pair[A, B]]{Value: pair, Version: pairVersion, TransactionID: transactionID}
@@ -161,6 +164,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 			mu.Unlock()
 			if verifiable && stillPublished() {
 				// The published pair is still what both inputs hold, so the notification only caught up with it.
+				publishMu.Unlock()
 				return
 			}
 			check := func() bool { return consistent(firstVersion, secondVersion, inputsProvisional) }
@@ -168,13 +172,11 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 				firstValue, secondValue, _, current := read()
 				candidate.Value, check = Pair[A, B]{firstValue.Value, secondValue.Value}, func() bool { return current[0]() && current[1]() }
 			}
+			// Publishes are serialized and pairVersion only grows, so candidate.Version is above published.Version.
 			mu.Lock()
-			if candidate.Version <= published.Version {
-				mu.Unlock()
-				return
-			}
 			published, publishedCurrent = candidate, check
 			mu.Unlock()
+			publishMu.Unlock()
 			fn(candidate)
 		}
 		// schedule publishes at once outside a transaction and after the transaction has settled every lower height inside one.
@@ -259,11 +261,7 @@ func linksOf[T any](source Observable[T]) sourceLinks[T] {
 		fresh := links.fresh
 		links.read = func() (Snapshot[T], bool, func() bool) {
 			snapshot := source.Snapshot()
-			if fresh != nil {
-				return snapshot, true, func() bool { return fresh(snapshot.Version) }
-			}
-			// An application Observable is current while its version is unchanged.
-			return snapshot, true, func() bool { return source.Snapshot().Version == snapshot.Version }
+			return snapshot, true, func() bool { return freshAt(fresh, snapshot.Version) }
 		}
 	}
 	return links

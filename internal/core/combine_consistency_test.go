@@ -1,10 +1,14 @@
 package core
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // These tests hold one Combine invariant: x and y are written only together, so every committed state has x+y == 1000, and neither a projector nor a subscriber may ever see another sum.
@@ -161,20 +165,19 @@ func TestCombineOverDerivedDoesNotMixConcurrentAtomic2Transactions(t *testing.T)
 	}
 }
 
-// hookedObservable is an application Observable over a Store that runs a test hook once, from Snapshot or after SubscribeSnapshot registers.
+// hookedObservable is an application Observable over a Store that runs a test hook once, from Snapshot before it reads the Store or after SubscribeSnapshot registers.
 type hookedObservable struct {
-	store       *Store[int]
-	once        sync.Once
-	onSnapshot  func()
-	onSubscribe func()
+	store          *Store[int]
+	once           sync.Once
+	beforeSnapshot func()
+	onSubscribe    func()
 }
 
 func (h *hookedObservable) Snapshot() Snapshot[int] {
-	snapshot := h.store.Snapshot()
-	if h.onSnapshot != nil {
-		h.once.Do(h.onSnapshot)
+	if h.beforeSnapshot != nil {
+		h.once.Do(h.beforeSnapshot)
 	}
-	return snapshot
+	return h.store.Snapshot()
 }
 
 func (h *hookedObservable) SubscribeSnapshot(fn func(Snapshot[int])) func() {
@@ -193,17 +196,17 @@ func slowSubscriber(y *Store[int]) (inDispatch, release chan struct{}) {
 	return inDispatch, release
 }
 
-// TestCombineConstructedDuringADispatchReadsACommittedPair commits Atomic2 between Combine's reads of its two sources.
+// TestCombineConstructedDuringADispatchReadsACommittedPair commits Atomic2 after Combine has read x and before it reads y. The second input is an application Observable only so the test can run code between the two reads; Combine must notice that x changed.
 func TestCombineConstructedDuringADispatchReadsACommittedPair(t *testing.T) {
 	var torn tornRecorder
 	x, y := New(100), New(900)
 	inDispatch, release := slowSubscriber(y)
 	done := make(chan error, 1)
-	first := &hookedObservable{store: x, onSnapshot: func() {
+	second := &hookedObservable{store: y, beforeSnapshot: func() {
 		go func() { done <- Atomic2(x, y, func(a, b *int) error { *a += 10; *b -= 10; return nil }) }()
 		<-inDispatch
 	}}
-	sum := Combine[int, int, int](first, y, torn.sum("Combine(x, y)"), nil)
+	sum := Combine[int, int, int](x, second, torn.sum("Combine(x, y)"), nil)
 	defer func() { _ = sum.Close() }()
 	got := sum.Get()
 	close(release)
@@ -433,5 +436,119 @@ func TestCombineStressNeverPublishesATornPair(t *testing.T) {
 	}
 	if got := over.Get(); got != tornTotal {
 		t.Errorf("Derive(Combine of Combines) = %d, want %d", got, tornTotal)
+	}
+}
+
+// TestCombineValuesOnlyMoveForwardWithVersion has concurrent writers count two Stores up independently, so every committed state has each counter at least as high as in any earlier one. Ordered by version, the pairs a Combine publishes must never move a counter back, and once the writers stop the Combine must hold the final state.
+func TestCombineValuesOnlyMoveForwardWithVersion(t *testing.T) {
+	const writers, operations = 8, 200
+	x, y := New(0), New(0)
+	pairOf := func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }
+	slowIdentity := func(v int) int {
+		for range 50 {
+			_ = rand.Int()
+		}
+		return v
+	}
+	dx := Derive[int, int](x, slowIdentity, nil)
+	defer dx.Close()
+	combines := map[string]*Derived[Pair[int, int], Pair[int, int]]{
+		"Combine(x, y)":         Combine(x, y, pairOf, nil),
+		"Combine(Derive(x), y)": Combine[int, int, Pair[int, int]](dx, y, pairOf, nil),
+	}
+	var mu sync.Mutex
+	delivered := make(map[string][]Snapshot[Pair[int, int]])
+	for name, c := range combines {
+		defer c.Close()
+		c.SubscribeSnapshot(func(s Snapshot[Pair[int, int]]) {
+			mu.Lock()
+			delivered[name] = append(delivered[name], s)
+			mu.Unlock()
+		})
+	}
+	var wg sync.WaitGroup
+	for w := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			store := x
+			if w%2 == 1 {
+				store = y
+			}
+			for range operations {
+				if err := store.Update(func(v *int) { *v++ }); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	final := Pair[int, int]{x.Get(), y.Get()}
+	mu.Lock()
+	defer mu.Unlock()
+	for name, c := range combines {
+		snapshots := delivered[name]
+		slices.SortFunc(snapshots, func(p, q Snapshot[Pair[int, int]]) int { return cmp.Compare(p.Version, q.Version) })
+		for i := 1; i < len(snapshots); i++ {
+			previous, next := snapshots[i-1], snapshots[i]
+			if next.Value.First < previous.Value.First || next.Value.Second < previous.Value.Second {
+				t.Errorf("%s moved back: v%d %+v -> v%d %+v", name, previous.Version, previous.Value, next.Version, next.Value)
+				break
+			}
+		}
+		if got := c.Get(); got != final {
+			t.Errorf("%s = %+v after the writers stopped, want the final state %+v", name, got, final)
+		}
+	}
+}
+
+// bumpingObservable is an application Observable over a Store whose Snapshot returns a new, higher version on every call, which the Observable contract allows.
+type bumpingObservable struct {
+	store   *Store[int]
+	version atomic.Uint64
+}
+
+func (o *bumpingObservable) Snapshot() Snapshot[int] {
+	return Snapshot[int]{Value: o.store.Get(), Version: o.version.Add(1)}
+}
+
+func (o *bumpingObservable) SubscribeSnapshot(fn func(Snapshot[int])) func() {
+	return o.store.Subscribe(func(Snapshot[int]) { fn(o.Snapshot()) })
+}
+
+// TestCombineOverAnObservableWithChangingVersionsReturns builds Combines, directly and through another Combine, over an application Observable whose version changes on every Snapshot; Combine must not wait for that version to hold still.
+func TestCombineOverAnObservableWithChangingVersionsReturns(t *testing.T) {
+	x, y := New(1), New(2)
+	sum := func(a, b int) int { return a + b }
+	built := make(chan [2]*Derived[Pair[int, int], int], 1)
+	go func() {
+		inner := Combine[int, int, int](&bumpingObservable{store: x}, y, sum, nil)
+		outer := Combine[int, int, int](inner, y, sum, nil)
+		built <- [2]*Derived[Pair[int, int], int]{inner, outer}
+	}()
+	var combines [2]*Derived[Pair[int, int], int]
+	select {
+	case combines = <-built:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Combine over an Observable whose version changes on every Snapshot did not return")
+	}
+	inner, outer := combines[0], combines[1]
+	defer inner.Close()
+	defer outer.Close()
+	if got := inner.Get(); got != 3 {
+		t.Fatalf("Combine = %d, want 3", got)
+	}
+	if got := outer.Get(); got != 5 {
+		t.Fatalf("Combine of the Combine = %d, want 5", got)
+	}
+	_ = x.Set(10)
+	_ = y.Set(20)
+	if got := inner.Get(); got != 30 {
+		t.Fatalf("Combine = %d after both writes, want 30", got)
+	}
+	if got := outer.Get(); got != 50 {
+		t.Fatalf("Combine of the Combine = %d after both writes, want 50", got)
 	}
 }

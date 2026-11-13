@@ -132,7 +132,7 @@ func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(
 	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1, linksOf(source))
 }
 
-// DeriveProjection memoizes an owned projection without whole-source clones. It follows SubscribeProjection's ownership contract; returned reference values and listener arguments are read-only.
+// DeriveProjection memoizes an owned projection without whole-source clones. It follows SubscribeProjection's ownership contract; returned reference values and listener arguments are read-only. A Combine that reads the derived value before it has caught up with source may also call project, without changing the derived value.
 func DeriveProjection[T any, V any](source Reader[T], project func(T) V, equals func(V, V) bool) *Derived[T, V] {
 	store := sourceStore(source)
 	if store == nil {
