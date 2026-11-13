@@ -23,7 +23,7 @@ func (JSONCodec[T]) Decode(data []byte) (T, error) {
 	return value, err
 }
 
-// FileStorage stores encoded state at Path. Save writes a temporary file in the same directory and renames it into place, so readers see a complete file.
+// FileStorage stores encoded state at Path. Save writes a temporary file in the same directory and renames it into place, so readers see a complete file. On Windows a file another handle holds open without delete sharing cannot be replaced: an antivirus or indexer scan, a sync client, or a reader such as another process's Load. Save retries such a replacement for up to about 2 s, stopping early when its context ends, and returns the error if the file is still held after that.
 type FileStorage struct {
 	Path string
 	Perm os.FileMode
@@ -213,7 +213,7 @@ func writeAtomicFile(ctx context.Context, path string, data []byte, perm os.File
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err = os.Rename(name, path); err != nil {
+	if err = replaceFile(ctx, name, path); err != nil {
 		return err
 	}
 	if durable {
@@ -261,7 +261,7 @@ func (f FileStorage) save(ctx context.Context, data []byte, primarySaved func())
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err = os.Rename(name, f.Path); err != nil {
+	if err = replaceFile(ctx, name, f.Path); err != nil {
 		return fmt.Errorf("nodra: replace %s: %w", f.Path, err)
 	}
 	if f.Durable {
