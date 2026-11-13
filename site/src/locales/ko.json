@@ -100,7 +100,7 @@
     "concurrency": "동시성",
     "copy": "복사",
     "copied": "복사됨",
-    "footnote": "Signatures, examples and contract notes are checked against the v1.2.0 sources, and every example compiles; pkg.go.dev is authoritative.",
+    "footnote": "Signatures, examples and contract notes are checked against the v1.3.0 sources, and every example compiles; pkg.go.dev is authoritative.",
     "metaTitle": "Nodra 문서 · API 레퍼런스",
     "metaDesc": "Nodra 루트 패키지의 메서드 색인과 의미론.",
     "ogImageAlt": "Nodra docs: the root package API reference with signatures, contracts and concurrency notes.",

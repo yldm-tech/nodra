@@ -100,7 +100,7 @@
     "concurrency": "CONCURRENCE",
     "copy": "Copier",
     "copied": "Copié",
-    "footnote": "Signatures, examples and contract notes are checked against the v1.2.0 sources, and every example compiles; pkg.go.dev is authoritative.",
+    "footnote": "Signatures, examples and contract notes are checked against the v1.3.0 sources, and every example compiles; pkg.go.dev is authoritative.",
     "metaTitle": "Docs Nodra · référence API",
     "metaDesc": "Index des méthodes et contrat sémantique du paquet racine Nodra.",
     "ogImageAlt": "Nodra docs: the root package API reference with signatures, contracts and concurrency notes.",
