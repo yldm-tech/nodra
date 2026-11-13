@@ -425,6 +425,34 @@ func TestInvalidArgumentsAndAClosedBridge(t *testing.T) {
 
 func second[A any](_ A, err error) error { return err }
 
+// Close already ends every exposure, so a stop called afterwards, as deferred stops are when the bridge is closed first, must not end it again.
+func TestStopsAfterCloseAreSafe(t *testing.T) {
+	store := nodra.New(state{})
+	defer func() { _ = store.Close() }()
+	b := bridge.New(bridge.Options{})
+	stopState, err := bridge.Expose(b, "s", store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopProjection, err := bridge.ExposeProjection(b, "p", store, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopAction, err := bridge.Handle(b, "a", func(context.Context, int) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Close()
+	for range 2 {
+		stopState()
+		stopProjection()
+		stopAction()
+	}
+	if _, err := b.Get(context.Background(), "s"); !errors.Is(err, bridge.ErrClosed) {
+		t.Fatalf("reading after Close and the stops returned %v", err)
+	}
+}
+
 func TestOptionsDecidePerPage(t *testing.T) {
 	store := nodra.New(state{})
 	defer func() { _ = store.Close() }()
