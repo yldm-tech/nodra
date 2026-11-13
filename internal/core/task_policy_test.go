@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -197,6 +198,132 @@ func TestConcurrentProgressDoesNotRegressStatus(t *testing.T) {
 	requireNoError(t, waitTask(t, task))
 	if regressed || action.Status().Get().Progress != 1 {
 		t.Fatal("concurrent progress or timing metrics regressed")
+	}
+}
+
+// Run publishes a new run's initial status after releasing the action lock, so concurrent calls can publish out of order. An older run must not replace a newer one's status: the status would then ignore every update from the newer run and stay on the superseded one for good.
+func TestConcurrentRunsLeaveStatusOnTheLatestRun(t *testing.T) {
+	for round := range 200 {
+		action, err := NewAsyncAction(New(0), "load", func(_ context.Context, in int, _ func(float64)) (int, error) { return in, nil }, func(s *int, v int) error { *s = v; return nil })
+		requireNoError(t, err)
+		tasks := make([]*Task, 8)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for n := range tasks {
+			wg.Go(func() {
+				<-start
+				task, err := action.Run(context.Background(), n)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				tasks[n] = task
+			})
+		}
+		close(start)
+		wg.Wait()
+		if t.Failed() {
+			return
+		}
+		var latest uint64
+		for _, task := range tasks {
+			if err := waitTask(t, task); err != nil && !errors.Is(err, ErrSuperseded) {
+				t.Fatalf("round %d: run %d: %v", round, task.ID, err)
+			}
+			latest = max(latest, task.ID)
+		}
+		status := action.Status().Get()
+		requireNoError(t, action.Close(context.Background()))
+		if status.ID != latest || status.Running || status.Phase != TaskSucceeded {
+			t.Fatalf("round %d: status is run %d, running %v, phase %v; want run %d succeeded", round, status.ID, status.Running, status.Phase, latest)
+		}
+	}
+}
+
+// A progress report can be overtaken by the terminal status after publishing its revision: here a status subscriber holds the report until the task has finished. Its trace is then older than the terminal one and must be dropped, or the source would list a finished task as running again.
+func TestProgressTraceOvertakenByTheTerminalStatusIsDropped(t *testing.T) {
+	store := New(0)
+	var mu sync.Mutex
+	var traces []ActionTrace
+	store.SubscribeActionTrace(func(event ActionTrace) { mu.Lock(); traces = append(traces, event); mu.Unlock() })
+	held, release, reported := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	action, err := NewAsyncAction(store, "overtaken", func(_ context.Context, _ int, report func(float64)) (int, error) {
+		go func() {
+			defer close(reported)
+			report(.5)
+		}()
+		<-held
+		return 1, nil
+	}, func(s *int, v int) error { *s = v; return nil })
+	requireNoError(t, err)
+	defer func() { _ = action.Close(context.Background()) }()
+	var hold sync.Once
+	stop := action.Status().Subscribe(func(snapshot Snapshot[AsyncState]) {
+		if snapshot.Value.Running && snapshot.Value.Progress == .5 {
+			hold.Do(func() { close(held); <-release })
+		}
+	})
+	defer stop()
+	task, err := action.Run(context.Background(), 0)
+	requireNoError(t, err)
+	requireNoError(t, waitTask(t, task))
+	close(release)
+	select {
+	case <-reported:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held progress report did not return")
+	}
+	if active := store.ActiveTasks(); len(active) != 0 {
+		t.Fatalf("finished task listed as active: %+v", active)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	last := traces[len(traces)-1]
+	if last.Phase != TaskSucceeded {
+		t.Fatalf("last trace is %v at task version %d, want the terminal one", last.Phase, last.TaskVersion)
+	}
+	for n := 1; n < len(traces); n++ {
+		if traces[n].TaskVersion < traces[n-1].TaskVersion {
+			t.Fatalf("trace task versions went back: %d after %d", traces[n].TaskVersion, traces[n-1].TaskVersion)
+		}
+	}
+}
+
+// status reads the task's revision and then publishes it to the action's status, so a concurrent report can publish a newer revision in between. The older one must not then overwrite it. Nothing can hold a report inside that window, so this test makes many concurrent reports and checks every commit of the action's status. It cannot fail while the revision check holds, and it needs more than one P to catch a regression, as does TestConcurrentRunsLeaveStatusOnTheLatestRun.
+func TestConcurrentProgressNeverPublishesAnOlderRevision(t *testing.T) {
+	action, err := NewAsyncAction(New(0), "progress order", func(_ context.Context, _ int, report func(float64)) (int, error) {
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				for n := range 500 {
+					report(float64(n) / 500)
+				}
+			})
+		}
+		wg.Wait()
+		return 1, nil
+	}, func(s *int, v int) error { *s = v; return nil })
+	requireNoError(t, err)
+	defer func() { _ = action.Close(context.Background()) }()
+	var mu sync.Mutex
+	var regression string
+	stop := action.Status().SubscribeMutations(func(mutation Mutation[AsyncState]) {
+		if mutation.Previous.ID == mutation.Value.ID && mutation.Value.Revision < mutation.Previous.Revision {
+			mu.Lock()
+			if regression == "" {
+				regression = fmt.Sprintf("run %d went from revision %d back to %d", mutation.Value.ID, mutation.Previous.Revision, mutation.Value.Revision)
+			}
+			mu.Unlock()
+		}
+	})
+	defer stop()
+	task, err := action.Run(context.Background(), 0)
+	requireNoError(t, err)
+	requireNoError(t, waitTask(t, task))
+	mu.Lock()
+	defer mu.Unlock()
+	if regression != "" {
+		t.Fatal(regression)
 	}
 }
 
