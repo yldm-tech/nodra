@@ -11,7 +11,7 @@
 ### Bug Fixes
 
 * **core:** an update callback that reads another store no longer deadlocks every store when an `Atomic2` or `AtomicGroup` starts meanwhile; store reads no longer take the global transaction gate, and the docs state that update callbacks may read other stores but must not write to any store
-* **core:** transactions settle derived values by height, so a `Combine` whose inputs sit at different depths, and anything derived from it, no longer sees a half-applied transaction, and a derived value settles on the newest snapshot of a transaction
+* **core:** transactions settle derived values by height, so a `Combine` whose inputs are Stores, read-only views or derived values at different depths, and anything derived from it, no longer sees a half-applied transaction, and a derived value settles on the newest snapshot of a transaction. An application `Observable` counts as height zero, so one that forwards a derived value is still not settled after it
 * **core:** a `Derive` or `Combine` constructed while a transaction is being dispatched no longer loses its catch-up and stays stale
 * **core:** an `Atomic2` or `AtomicGroup` commit into a store with an open batch becomes the batch's publication boundary: the batch no longer republishes the transaction's value, and each mutation's `Previous` is the value subscribers last received
 * **bridge:** `Expose` and `ExposeProjection` return `ErrInvalid` for a zero `ReadOnly` (or a `Store` or `ReadOnly` without a store) instead of serving its zero value through a watch that never ends

@@ -21,7 +21,7 @@ Use `nodra.Atomic2`, `nodra.AtomicGroup`, and `nodra.AtomicUpdate` when several 
 
 ## Read-only and derived values
 
-`Store.ReadOnly()` returns `ReadOnly[T]`, which exposes observation without write or close capability. `Reader[T]` is the sealed observation surface accepted by projection and DevTools APIs; applications cannot implement it. `Observable[T]` is the smaller versioned surface accepted by `Derive`, `Combine`, and invalidation helpers and can be implemented by applications.
+`Store.ReadOnly()` returns `ReadOnly[T]`, which exposes observation without write or close capability. `Reader[T]` is the sealed observation surface accepted by projection and DevTools APIs; applications cannot implement it. `Observable[T]` is the smaller versioned surface accepted by `Derive`, `Combine`, and invalidation helpers and can be implemented by applications. Transactions settle derived values in dependency order only for Stores, read-only views and Nodra derived values: an application `Observable` counts as a source of height zero, so a `Combine` over one that forwards a derived value may see a half-applied `Atomic2` or `AtomicGroup`.
 
 Use `Derive`, `DeriveProjection`, `Combine`, `Select`, `SubscribeSelector(With)`, and `SubscribeProjection(With)` for computed values. Equality callbacks must be pure and safe for concurrent calls. A derived value with a nil equals function notifies on every accepted source version; pass one to notify only on changes. Call `Close` on derived values when their owner is done; `Derived.Done` is closed when it is.
 
