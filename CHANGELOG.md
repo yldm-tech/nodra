@@ -39,11 +39,17 @@
 
 ### Documentation
 
-* docs/compatibility.md no longer plans a v2 just to drop the MyGo import from the root package: MyGo apps link MyGo anyway and other programs use the `nodra_nomygo` tag, so the change waits for the next major version that another breaking change requires
 * **core:** state that a derived value with a nil equals function notifies on every accepted source version, and that an equality function is what filters unchanged values
 * document every root-package function in Go doc; index `Define`, `DefineWithClone`, `Definition`, `BindField`, `Field`, `Derived`, `NewMemoryKeyProvider`, `NewScope` and the MyGo invalidation helpers in docs/public-api.md; list the methods of every re-exported type under that type in docs/public-api.md and in the package comment, including ReadOnly, the MemoryKeyProvider key-rotation methods, FileStorage, CheckedFileStorage and the codecs, because Go doc shows no methods for the root aliases; remove a duplicated paragraph from docs/architecture.md. No API or behaviour changes
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 * state in docs/architecture.md and the Go docs that `SubscribeMetrics` callbacks are not covered by `Task.Wait` or `AsyncAction.Close` and can run after unsubscribing, and that `Metrics` read after `Close` is the final aggregate
+
+## [1.4.0](https://github.com/yldm-tech/nodra/compare/v1.3.0...v1.4.0) (2026-11-13)
+
+
+### Features
+
+* **bridge:** space a watch's frames out with Options.FrameInterval ([#112](https://github.com/yldm-tech/nodra/issues/112)) ([8a1ce63](https://github.com/yldm-tech/nodra/commit/8a1ce632e79f1dd08db0339f51c23889e64d53f8))
 
 ## [1.3.0](https://github.com/yldm-tech/nodra/compare/v1.2.0...v1.3.0) (2026-11-13)
 
