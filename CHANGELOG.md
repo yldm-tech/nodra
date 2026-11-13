@@ -5,6 +5,7 @@
 ### Features
 
 * **core:** add `Derived.Done`, closed by `Close`, so a bridge watch of a derived value ends with `ErrClosed` when the derived value closes
+* **persistence:** add `AsyncOptions.MaxWait` to bound how long continuous updates can postpone an `AutoSaveAsync` debounced write; every update restarts the trailing debounce, so a store updated more often than `Debounce` was not written until Flush or Close. Zero keeps today's unbounded behaviour, and the postponement is now documented on `AsyncOptions` and in docs/architecture.md
 * **bridge:** let the web pages of a MyGo app follow a Store and change it through registered actions: `bridge.Expose` and `bridge.ExposeProjection` serve a source, or the part of it pages may see, through a bound service whose watch sends a frame only when the encoded value changes and coalesces to the latest while a page is slow; `bridge.Handle` registers the actions pages dispatch; `Options.AllowRead` and `Options.AllowDispatch` decide per page. A dependency-free JavaScript client (`bridge/client`, also served from Go as `bridge.Client`) fits React's `useSyncExternalStore`. See docs/bridge.md and examples/web
 * **nativeui:** make a native UI window's Undo and Redo act on a History: `nativeui.UndoShortcuts` registers Cmd+Z and Shift+Cmd+Z (and Ctrl+Y on Windows) while history can act, so with MyGo 0.7.4 on macOS the Edit menu enables its items only then, and a focused text input keeps its own undo; `nativeui.InvalidateHistory` redraws the window when that changes. A separate subpackage, so apps without native UI do not link MyGo's ui package
 * **async:** `ActionMetrics` gains `Superseded`, and superseded LatestWins runs are counted there instead of in `Failed`, matching the `TaskSuperseded` phase; docs/architecture.md describes the classification
@@ -22,6 +23,13 @@
 * **core:** an `Atomic2` or `AtomicGroup` commit into a store with an open batch becomes the batch's publication boundary: the batch no longer republishes the transaction's value, and each mutation's `Previous` is the value subscribers last received
 * **bridge:** `Expose` and `ExposeProjection` return `ErrInvalid` for a zero `ReadOnly` (or a `Store` or `ReadOnly` without a store) instead of serving its zero value through a watch that never ends
 * **core:** closing a store inside an open batch gives its last committed value a new version instead of one already published with an older value
+
+### Bug Fixes
+
+* **persistence:** a journaled FileStorage no longer fails every Load, WithConflictDetection and CheckedFileStorage call after a crash or failed removal during journal cleanup: cleanup now removes the commit marker before the journal, and recovery discards a commit marker that has no matching journal instead of returning "read committed journal" or "committed journal checksum mismatch"
+* **persistence:** `FileStorage{Durable: true}` no longer fails every Save on Windows with an access-denied directory sync after the primary was already replaced, which also skipped the backup; Windows has no directory fsync, so the sync is skipped there, as the journal path already did
+* **persistence:** `LoadWithRecovery` now falls back to the backup when the primary fails to decode with an error that wraps `ErrInvalidPersistence`, such as a damaged `VersionedJSONCodec` envelope; it used to return that load error as if the configuration were invalid and never tried the backup. Configuration errors still stop before the backup and are not reported as `RecoveryError`: the bare sentinel from a storage or codec (an empty `FileStorage` path, an `AESGCMCodec` without `Inner` or `Keys`, a `VersionedJSONCodec` with `Version` below 1) and any read-stage rejection, such as a `CheckedFileStorage` primary that became a symlink
+* **persistence:** the `AutoSaveAsync` worker now turns a panic from `PersistenceOptions.Validate`, `Codec.Encode` or `Storage.Save` into a `PanicError` write failure, reported through Errors, Flush and Close with the state left pending, instead of crashing the process; synchronous Save and AutoSave still propagate panics to their caller
 
 ### Dependencies
 

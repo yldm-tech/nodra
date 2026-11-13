@@ -7,12 +7,14 @@ import (
 	"time"
 )
 
-// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge delay for bursts of updates; zero starts immediately. Flush bypasses the delay.
+// AsyncOptions configures write-behind persistence. Debounce is a trailing-edge delay for bursts of updates; zero starts immediately. Every update restarts the delay, so updates that keep arriving more often than Debounce postpone the write until they pause, or until Flush or Close, unless MaxWait is set. Flush bypasses the delay.
 type AsyncOptions struct {
 	Debounce time.Duration
+	// MaxWait bounds how long continuous updates can postpone a debounced write. The worker starts writing the latest state at most MaxWait after it begins waiting for pending changes, even if updates continue; a shorter MaxWait than Debounce caps the delay itself. Zero keeps the delay unbounded, negative values are invalid, and it has no effect when Debounce is zero.
+	MaxWait time.Duration
 }
 
-// AsyncPersistence owns one worker and a bounded error stream. It coalesces updates without blocking writer goroutines on encoding or storage. Failed writes remain pending; the next update or Flush retries them without spinning. Values must be immutable or the store must use NewWithClone.
+// AsyncPersistence owns one worker and a bounded error stream. It coalesces updates without blocking writer goroutines on encoding or storage. Failed writes remain pending; the next update or Flush retries them without spinning. A panic in PersistenceOptions.Validate, Codec.Encode or Storage.Save during a background write is reported as a PanicError write failure. Values must be immutable or the store must use NewWithClone.
 type AsyncPersistence[T any] struct {
 	p           *Persistence[T]
 	ctx         context.Context
@@ -43,7 +45,7 @@ type AsyncPersistence[T any] struct {
 
 // AutoSaveAsync subscribes and schedules the current state once, then all subsequent versions. Use Close before closing the store to drain writes. Parent cancellation and store closure stop the worker without a guaranteed drain. Storage.Save must respect context cancellation to bound shutdown time.
 func (p *Persistence[T]) AutoSaveAsync(ctx context.Context, options AsyncOptions) (*AsyncPersistence[T], error) {
-	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) || options.Debounce < 0 {
+	if p == nil || p.store == nil || isNilInterface(p.storage) || isNilInterface(p.codec) || options.Debounce < 0 || options.MaxWait < 0 {
 		return nil, ErrInvalidPersistence
 	}
 	if ctx == nil {
@@ -247,7 +249,12 @@ func (a *AsyncPersistence[T]) run() {
 				break
 			}
 			a.publishStatus()
-			version, err := a.p.save(a.ctx)
+			// Validate, Encode and Storage.Save are application code running on this library-owned goroutine. A panic becomes a PanicError write failure, so the state stays pending for a retry instead of the process crashing; save's deferred unlock has already released the save lock.
+			var version uint64
+			err := taskBoundary(func() (err error) {
+				version, err = a.p.save(a.ctx)
+				return err
+			})
 			a.mu.Lock()
 			a.saving = false
 			a.revision++
@@ -276,6 +283,13 @@ func (a *AsyncPersistence[T]) waitDebounce() bool {
 	}
 	timer := time.NewTimer(a.options.Debounce)
 	defer timer.Stop()
+	// The MaxWait deadline counts from the start of this wait and is never reset by later updates. A nil channel never fires, which keeps the unbounded default.
+	var deadline <-chan time.Time
+	if a.options.MaxWait > 0 {
+		maxTimer := time.NewTimer(a.options.MaxWait)
+		defer maxTimer.Stop()
+		deadline = maxTimer.C
+	}
 	a.mu.Lock()
 	observed := a.requested
 	a.mu.Unlock()
@@ -291,6 +305,8 @@ func (a *AsyncPersistence[T]) waitDebounce() bool {
 			return false
 		case <-a.p.store.done:
 			return false
+		case <-deadline:
+			return true
 		case <-a.wake:
 			a.mu.Lock()
 			observed = a.requested

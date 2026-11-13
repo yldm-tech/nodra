@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -359,4 +360,140 @@ func TestAsyncRejectsInvalidConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+type panickingStorage struct {
+	asyncStorage
+	panicking atomic.Bool
+}
+
+func (s *panickingStorage) Save(ctx context.Context, data []byte) error {
+	if s.panicking.Load() {
+		panic("storage bug")
+	}
+	return s.asyncStorage.Save(ctx, data)
+}
+
+type panickingCodec struct {
+	JSONCodec[int]
+	panicking *atomic.Bool
+}
+
+func (c panickingCodec) Encode(value int) ([]byte, error) {
+	if c.panicking.Load() {
+		panic("codec bug")
+	}
+	return c.JSONCodec.Encode(value)
+}
+
+// The write-behind worker runs Storage.Save, Codec.Encode and Validate on a goroutine the library owns, so a panic there must become a PanicError write failure instead of killing the process.
+func TestAsyncPersistenceContainsWorkerPanics(t *testing.T) {
+	for _, boundary := range []string{"storage", "codec", "validate"} {
+		t.Run(boundary, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				storage := &panickingStorage{}
+				panicking := &storage.panicking
+				var codec Codec[int] = JSONCodec[int]{}
+				var options PersistenceOptions[int]
+				want := boundary + " bug"
+				switch boundary {
+				case "codec":
+					panicking = &atomic.Bool{}
+					codec = panickingCodec{panicking: panicking}
+				case "validate":
+					panicking = &atomic.Bool{}
+					options.Validate = func(int) error {
+						if panicking.Load() {
+							panic("validate bug")
+						}
+						return nil
+					}
+				}
+				panicking.Store(true)
+				store := New(5)
+				writer, err := NewPersistenceWithOptions(store, storage, codec, options).AutoSaveAsync(context.Background(), AsyncOptions{})
+				requireNoError(t, err)
+				var panicErr *PanicError
+				if err := writer.Flush(context.Background()); !errors.As(err, &panicErr) || panicErr.Value != want {
+					t.Fatalf("flush error = %v, want PanicError(%q)", err, want)
+				}
+				// Let a retry forced by the failed Flush settle before inspecting the worker.
+				synctest.Wait()
+				select {
+				case err := <-writer.Errors():
+					if !errors.As(err, &panicErr) || panicErr.Value != want {
+						t.Fatalf("reported error = %v", err)
+					}
+				default:
+					t.Fatal("panic was not reported on Errors")
+				}
+				if status := writer.Status().Get(); !status.Pending || status.Saving || status.Closed || status.Error == "" {
+					t.Fatalf("status after panic = %+v", status)
+				}
+				panicking.Store(false)
+				requireNoError(t, writer.Flush(context.Background()))
+				requireNoError(t, store.Set(6))
+				requireNoError(t, writer.Close(context.Background()))
+				if values, _ := storage.result(); !reflect.DeepEqual(values, []int{5, 6}) {
+					t.Fatalf("writes after recovery = %v", values)
+				}
+			})
+		})
+	}
+}
+
+// Updates arriving faster than Debounce restart the trailing delay forever. MaxWait bounds that postponement from the start of each wait, and zero keeps the unbounded behaviour.
+func TestAsyncMaxWaitBoundsDebouncePostponement(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		maxWait       time.Duration
+		before, after []int
+	}{
+		{name: "unbounded", before: nil, after: []int{100}},
+		// Waits start at 0 ms and 1020 ms, so the writes at 1000 ms and 2020 ms capture the updates made at 990 ms and 2010 ms; the third wait has not expired when updates stop at 3000 ms.
+		{name: "bounded", maxWait: time.Second, before: []int{33, 67}, after: []int{33, 67, 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store, storage := New(0), &asyncStorage{}
+				writer, err := NewPersistence(store, storage, JSONCodec[int]{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: 100 * time.Millisecond, MaxWait: tc.maxWait})
+				requireNoError(t, err)
+				for i := 1; i <= 100; i++ {
+					time.Sleep(30 * time.Millisecond)
+					requireNoError(t, store.Set(i))
+				}
+				synctest.Wait()
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.before) {
+					t.Fatalf("writes during continuous updates = %v, want %v", values, tc.before)
+				}
+				requireNoError(t, writer.Close(context.Background()))
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.after) {
+					t.Fatalf("writes after close = %v, want %v", values, tc.after)
+				}
+			})
+		})
+	}
+}
+
+func TestAsyncMaxWaitShorterThanDebounceAndValidation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store, storage := New(1), &asyncStorage{}
+		persistence := NewPersistence(store, storage, JSONCodec[int]{})
+		if _, err := persistence.AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Second, MaxWait: -time.Second}); !errors.Is(err, ErrInvalidPersistence) {
+			t.Fatalf("negative MaxWait = %v", err)
+		}
+		writer, err := persistence.AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Hour, MaxWait: time.Minute})
+		requireNoError(t, err)
+		time.Sleep(time.Minute - time.Millisecond)
+		synctest.Wait()
+		if _, calls := storage.result(); calls != 0 {
+			t.Fatal("MaxWait wrote before its deadline")
+		}
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		if values, _ := storage.result(); !reflect.DeepEqual(values, []int{1}) {
+			t.Fatalf("writes at MaxWait = %v", values)
+		}
+		requireNoError(t, writer.Close(context.Background()))
+	})
 }

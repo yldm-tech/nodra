@@ -61,9 +61,6 @@ func TestFileStorageAcceptsNilContext(t *testing.T) {
 }
 
 func TestFileStorageDurableRenameAndEncryptedPersistence(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory fsync is platform-specific")
-	}
 	path := filepath.Join(t.TempDir(), "durable", "state.json")
 	keys, err := NewMemoryKeyProvider("v1", []byte("01234567890123456789012345678901"))
 	requireNoError(t, err)
@@ -133,5 +130,70 @@ func TestJournaledFileStorageIgnoresUncommittedRecord(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".journal"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("uncommitted journal remains: %v", err)
+	}
+}
+
+// A crash between the two cleanup removals of a finished journaled save leaves a commit marker without its journal. The primary already holds the committed bytes, so recovery must drop the stale marker instead of failing every load.
+func TestJournaledFileStorageDiscardsCommitMarkerWithoutJournal(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.json")
+	storage := FileStorage{Path: path, Journal: true}
+	saved := []byte(`{"count":2}`)
+	requireNoError(t, storage.Save(ctx, saved))
+	digest := sha256.Sum256(saved)
+	requireNoError(t, os.WriteFile(path+".commit", []byte(hex.EncodeToString(digest[:])), 0600))
+	for range 2 {
+		data, err := storage.Load(ctx)
+		if err != nil || string(data) != string(saved) {
+			t.Fatalf("load=%q err=%v", data, err)
+		}
+	}
+	if _, err := os.Stat(path + ".commit"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale commit marker remains: %v", err)
+	}
+	requireNoError(t, os.WriteFile(path+".commit", []byte(hex.EncodeToString(digest[:])), 0600))
+	checked, err := storage.WithConflictDetection(ctx)
+	if err != nil {
+		t.Fatalf("conflict detection with stale marker: %v", err)
+	}
+	requireNoError(t, checked.Save(ctx, []byte(`{"count":3}`)))
+	data, err := checked.Load(ctx)
+	if err != nil || string(data) != `{"count":3}` {
+		t.Fatalf("checked load=%q err=%v", data, err)
+	}
+}
+
+// A commit marker from an earlier save next to the journal of a later save that stopped before committing must not wedge loads: the later journal was never committed, and the marker is only written after the primary is durable.
+func TestJournaledFileStorageDiscardsStaleCommitMarkerWithUncommittedJournal(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.json")
+	storage := FileStorage{Path: path, Journal: true}
+	saved := []byte(`{"count":2}`)
+	requireNoError(t, storage.Save(ctx, saved))
+	digest := sha256.Sum256(saved)
+	requireNoError(t, os.WriteFile(path+".commit", []byte(hex.EncodeToString(digest[:])), 0600))
+	requireNoError(t, os.WriteFile(path+".journal", []byte(`{"count":3}`), 0600))
+	data, err := storage.Load(ctx)
+	if err != nil || string(data) != string(saved) {
+		t.Fatalf("load=%q err=%v", data, err)
+	}
+	for _, suffix := range []string{".journal", ".commit"} {
+		if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("journal artifact %s remains: %v", suffix, err)
+		}
+	}
+}
+
+// Durable must not turn every successful replacement into a failure on platforms without directory fsync, and the backup must still be written.
+func TestFileStorageDurableSaveWritesBackup(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "durable", "state.json")
+	storage := FileStorage{Path: path, Durable: true, Backup: true}
+	requireNoError(t, storage.Save(ctx, []byte("state")))
+	for _, candidate := range []string{path, path + ".bak"} {
+		data, err := os.ReadFile(candidate)
+		if err != nil || string(data) != "state" {
+			t.Fatalf("%s=%q err=%v", candidate, data, err)
+		}
 	}
 }
