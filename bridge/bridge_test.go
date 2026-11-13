@@ -180,6 +180,7 @@ func TestWatchSkipsTheVersionThePageHolds(t *testing.T) {
 	_ = result(t, done)
 }
 
+// The send here blocks while the page is busy. A page's MyGo channel blocks only once about 1 MiB of frames waits for the page, so this models a page past that window.
 func TestTheLatestFrameWinsWhileThePageIsSlow(t *testing.T) {
 	store := nodra.New(state{})
 	defer func() { _ = store.Close() }()
@@ -521,4 +522,104 @@ func TestWatchersSeeTheFinalStateUnderConcurrentWrites(t *testing.T) {
 	}
 	cancel()
 	watches.Wait()
+}
+
+// Versions count per source, so a version the page holds from an exposure says nothing about another source exposed later under the same name.
+func TestAWatchOfANameExposedAgainSendsTheFirstFrame(t *testing.T) {
+	b := bridge.New(bridge.Options{})
+	defer b.Close()
+	docA := nodra.New(state{})
+	defer func() { _ = docA.Close() }()
+	if err := docA.Update(func(s *state) { s.Count = 111 }); err != nil {
+		t.Fatal(err)
+	}
+	stopA, err := bridge.ExposeProjection(b, "doc", docA, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := newFrames()
+	done := watch(ctx, b, "doc", 0, f)
+	held := f.wait(t, 1)[0]
+	stopA()
+	if err := result(t, done); !errors.Is(err, bridge.ErrClosed) {
+		t.Fatalf("the watch of a stopped exposure returned %v", err)
+	}
+
+	docB := nodra.New(state{})
+	defer func() { _ = docB.Close() }()
+	if err := docB.Update(func(s *state) { s.Count = 222 }); err != nil {
+		t.Fatal(err)
+	}
+	if docB.Version() != held.Version {
+		t.Fatalf("the test needs both sources at one version: A at %d, B at %d", held.Version, docB.Version())
+	}
+	if _, err := bridge.ExposeProjection(b, "doc", docB, project); err != nil {
+		t.Fatal(err)
+	}
+	// The page resumes as nodra.js does, from the version it holds.
+	g := newFrames()
+	done = watch(ctx, b, "doc", held.Version, g)
+	if got := g.wait(t, 1)[0]; decode[pageState](t, got).Count != 222 || got.Version != docB.Version() {
+		t.Fatalf("first frame of the name exposed again = %+v", got)
+	}
+	cancel()
+	_ = result(t, done)
+}
+
+// A page that a policy refuses gets ErrDenied whether or not the name is exposed or registered, so it cannot tell which names exist.
+func TestARefusedPageCannotTellWhichNamesExist(t *testing.T) {
+	store := nodra.New(state{})
+	defer func() { _ = store.Close() }()
+	var mu sync.Mutex
+	var asked []string
+	deny := func(_ context.Context, name string) bool {
+		mu.Lock()
+		asked = append(asked, name)
+		mu.Unlock()
+		return false
+	}
+	b := bridge.New(bridge.Options{AllowRead: deny, AllowDispatch: deny})
+	defer b.Close()
+	if _, err := bridge.Expose(b, "admin/secrets", store); err != nil {
+		t.Fatal(err)
+	}
+	ran := false
+	if _, err := bridge.Handle(b, "admin/wipe", func(context.Context, int) error { ran = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, name := range []string{"admin/secrets", "admin/other"} {
+		if _, err := b.Get(ctx, name); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Get(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+		if err := b.Watch(ctx, name, 0, func(bridge.Frame) error { return nil }); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Watch(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+	}
+	for _, name := range []string{"admin/wipe", "admin/nope"} {
+		if err := b.Dispatch(ctx, name, nil); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Dispatch(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+	}
+	if ran {
+		t.Error("a refused dispatch ran the action")
+	}
+	askedSoFar := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), asked...)
+	}
+	if got := askedSoFar(); len(got) != 6 {
+		t.Errorf("the policies were asked about %q, want every call", got)
+	}
+	// A closed bridge still answers ErrClosed without asking.
+	b.Close()
+	if _, err := b.Get(ctx, "admin/other"); !errors.Is(err, bridge.ErrClosed) {
+		t.Errorf("Get on a closed bridge returned %v", err)
+	}
+	if got := askedSoFar(); len(got) != 6 {
+		t.Errorf("a closed bridge asked the policy: %q", got)
+	}
 }

@@ -82,7 +82,7 @@ const counter = remoteState("counter"); // subscribe and getSnapshot fit useSync
 await dispatch("counter/add", 1);
 ```
 
-선택적 `bridge` 하위 패키지는 하나의 Store를 네이티브 창과 웹 페이지 모두의 단일 상태 원천으로 만듭니다. 페이지는 프로젝션이 반환하는 값만 보고, 값이 바뀔 때만 새 프레임을 받으며(느린 페이지는 최신 프레임만 받습니다), Go가 등록한 Action으로만 상태를 바꿀 수 있습니다. [`bridge/client`](bridge/client/nodra.js)의 JavaScript 클라이언트는 의존성이 없습니다. 자세한 내용은 [`docs/bridge.md`](docs/bridge.md)와 [`examples/web`](examples/web/main.go)를 참고하세요.
+선택적 `bridge` 하위 패키지는 하나의 Store를 네이티브 창과 웹 페이지 모두의 단일 상태 원천으로 만듭니다. 페이지는 프로젝션이 반환하는 값만 보고, 값이 바뀔 때만 새 프레임을 받으며(느린 페이지에 가져가지 않은 프레임이 약 1 MiB 쌓이면 최신 프레임으로 합쳐집니다), Go가 등록한 Action으로만 상태를 바꿀 수 있습니다. [`bridge/client`](bridge/client/nodra.js)의 JavaScript 클라이언트는 의존성이 없습니다. 자세한 내용은 [`docs/bridge.md`](docs/bridge.md)와 [`examples/web`](examples/web/main.go)를 참고하세요.
 
 ## 완전한 예제
 

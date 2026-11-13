@@ -82,7 +82,7 @@ const counter = remoteState("counter"); // subscribe and getSnapshot fit useSync
 await dispatch("counter/add", 1);
 ```
 
-可选的 `bridge` 子包让一个 Store 同时作为原生窗口和网页的唯一状态源。网页只看到投影返回的值，值变化时才收到新帧（网页处理慢时只收最新一帧），也只能通过 Go 注册的 Action 修改状态。[`bridge/client`](bridge/client/nodra.js) 里的 JavaScript 客户端没有任何依赖。详见 [`docs/bridge.md`](docs/bridge.md) 和 [`examples/web`](examples/web/main.go)。
+可选的 `bridge` 子包让一个 Store 同时作为原生窗口和网页的唯一状态源。网页只看到投影返回的值，值变化时才收到新帧（网页处理慢、积压约 1 MiB 未取走的帧后才合并为最新一帧），也只能通过 Go 注册的 Action 修改状态。[`bridge/client`](bridge/client/nodra.js) 里的 JavaScript 客户端没有任何依赖。详见 [`docs/bridge.md`](docs/bridge.md) 和 [`examples/web`](examples/web/main.go)。
 
 ## 完整示例
 

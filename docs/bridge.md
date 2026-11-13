@@ -5,7 +5,7 @@ The bridge is an optional Go subpackage, `github.com/yldm-tech/nodra/bridge`, th
 Without it, an app keeps a second copy of its state in the frontend, in a JavaScript store, and keeps the two in step by hand with bound methods and events. With it, Go decides what each page may see and what it may do:
 
 - A page sees a state only as Go exposes it, as a whole or through a projection that leaves secrets and large internals in Go.
-- A page receives a new frame only when the value it sees changes, and the latest one when it is slower than the store.
+- A page receives a new frame only when the value it sees changes. Frames coalesce into the latest only once MyGo's channel holds back sends, at about 1 MiB of frames the page has not taken per watch, so a slow page may still receive each intermediate change.
 - A page changes state only by dispatching an action Go registered; it never writes a store.
 
 ## Go
@@ -40,7 +40,7 @@ b.Bind() // the service Nodra; BindAs("Other") for another name
 
 `Handle` decodes the JSON argument a page dispatches into the handler's argument type, a missing or `null` one into its zero value, and calls the handler with the call's context, which MyGo cancels when the page navigates away or its window closes. The handler changes state through the app's stores like any other code, so the bridge adds no second way to write state, and history, persistence and DevTools see the change as usual. The handler's error rejects the page's promise.
 
-State names and action names are separate: the same name may be both. A name is taken until its stop function runs or the bridge closes; `ErrExists` reports a second use.
+State names and action names are separate: the same name may be both. A name is taken until its stop function runs or the bridge closes; `ErrExists` reports a second use. Until it closes, a bridge remembers every name a state was exposed under, so that a watch of a name exposed again sends its first frame (see the service below); an app that exposes a growing number of distinct names, such as one per document, keeps a small entry for each.
 
 ### Which pages may call
 
@@ -54,7 +54,7 @@ b := bridge.New(bridge.Options{
 })
 ```
 
-A refused call fails with `ErrDenied`.
+A refused call fails with `ErrDenied`, whether or not anything is exposed or registered under the name, so a refused page cannot tell which names exist; the functions are therefore also asked about names nothing is exposed or registered under.
 
 ## JavaScript
 
@@ -89,7 +89,7 @@ function Count() {
 }
 ```
 
-`ready()` resolves with the first value. `getError()` tells why a watch ended, such as a state that is not exposed (`ErrNotFound`), a page that is not allowed (`ErrDenied`) or a state that went away (`ErrClosed`); listeners are called then too, and a later subscriber tries again. `getState(name)` reads a frame once without following the state. Every function takes `{ service }` for a bridge bound with `BindAs`.
+`ready()` resolves with the current value: the one a running watch keeps once it has sent a frame, or else the next frame of a watch Go sends its current frame to. It starts that watch when none runs, and restarts a watch that resumed from the version the page holds and has sent nothing yet, since Go sends such a watch no frame while the value is unchanged; subscribers follow the restarted watch. A value the page held from an ended watch is therefore not mistaken for the current one. `getError()` tells why a watch ended, such as a state that is not exposed (`ErrNotFound`), a page that is not allowed (`ErrDenied`) or a state that went away (`ErrClosed`); listeners are called then too, and a later subscriber tries again. `getState(name)` reads a frame once without following the state. Every function takes `{ service }` for a bridge bound with `BindAs`.
 
 ## The service
 
@@ -98,10 +98,10 @@ Apps that use `mygo generate` get the bridge's service in their typed client too
 | Method | What it does |
 | --- | --- |
 | `Get(name)` | returns the current `Frame` of a state |
-| `Watch(name, after, frames)` | streams frames through a `Channel<Frame>`: the current one unless its version is `after`, then one whenever the encoded value changes, until the page closes the channel or the state goes away |
+| `Watch(name, after, frames)` | streams frames through a `Channel<Frame>`: the current one unless its version is `after` and the name was exposed only once, then one whenever the encoded value changes, until the page closes the channel or the state goes away |
 | `Dispatch(name, arg)` | runs an action with its JSON argument |
 
-A `Frame` is `{ name, version, value }`. Versions are the source's and only grow within a watch. The Go methods `Bridge.Get`, `Bridge.Watch` and `Bridge.Dispatch` do the same without MyGo, for tests and for Go code.
+A `Frame` is `{ name, version, value }`. Versions are the source's and only grow within a watch. A name exposed again may hold another source, whose versions count apart, so a watch of it sends its first frame even when the version equals `after`. The Go methods `Bridge.Get`, `Bridge.Watch` and `Bridge.Dispatch` do the same without MyGo, for tests and for Go code.
 
 ## Compatibility surface
 

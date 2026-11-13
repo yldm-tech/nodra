@@ -82,7 +82,7 @@ const counter = remoteState("counter"); // subscribe and getSnapshot fit useSync
 await dispatch("counter/add", 1);
 ```
 
-オプションの `bridge` サブパッケージにより、1 つの Store をネイティブウィンドウと Web ページ共通の唯一の状態源にできます。ページは投影が返す値だけを受け取り、値が変わったときにだけ新しいフレームを受け取ります（処理が遅いページには最新のフレームだけが届きます）。状態は Go が登録した Action でのみ変更できます。[`bridge/client`](bridge/client/nodra.js) の JavaScript クライアントは依存関係がありません。詳しくは [`docs/bridge.md`](docs/bridge.md) と [`examples/web`](examples/web/main.go) を参照してください。
+オプションの `bridge` サブパッケージにより、1 つの Store をネイティブウィンドウと Web ページ共通の唯一の状態源にできます。ページは投影が返す値だけを受け取り、値が変わったときにだけ新しいフレームを受け取ります（処理が遅いページで未取得のフレームが約 1 MiB たまると、最新のフレームにまとめられます）。状態は Go が登録した Action でのみ変更できます。[`bridge/client`](bridge/client/nodra.js) の JavaScript クライアントは依存関係がありません。詳しくは [`docs/bridge.md`](docs/bridge.md) と [`examples/web`](examples/web/main.go) を参照してください。
 
 ## 完全なサンプル
 
