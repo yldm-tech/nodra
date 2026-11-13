@@ -32,17 +32,17 @@ const DefaultService = "Nodra"
 var (
 	// ErrClosed is returned once the bridge is closed, and ends a page's watch when its source is no longer exposed or has closed.
 	ErrClosed = errors.New("nodra bridge: closed")
-	// ErrNotFound is returned for a state or an action name that nothing is exposed or registered under.
+	// ErrNotFound is returned to a page the options allow for a state or an action name that nothing is exposed or registered under.
 	ErrNotFound = errors.New("nodra bridge: state or action not found")
 	// ErrExists is returned when a name is exposed or registered twice.
 	ErrExists = errors.New("nodra bridge: name already in use")
 	// ErrInvalid is returned for an empty name, a nil source or function, and an argument that does not decode.
 	ErrInvalid = errors.New("nodra bridge: invalid name, source or argument")
-	// ErrDenied is returned when Options.AllowRead or Options.AllowDispatch refuses the calling page.
+	// ErrDenied is returned when Options.AllowRead or Options.AllowDispatch refuses the calling page, whether or not anything is exposed or registered under the name.
 	ErrDenied = errors.New("nodra bridge: not allowed for this page")
 )
 
-// Options configures a Bridge. MyGo lets only the app's own pages call bound services (see TrustedOrigins in MyGo's bindings guide); AllowRead and AllowDispatch narrow that further, per state or action name. Their context is the call's, so mygo.CallerWindow and mygo.CallerPage tell which window and page call. Nil allows every page MyGo lets call. They must be concurrency-safe.
+// Options configures a Bridge. MyGo lets only the app's own pages call bound services (see TrustedOrigins in MyGo's bindings guide); AllowRead and AllowDispatch narrow that further, per state or action name. Their context is the call's, so mygo.CallerWindow and mygo.CallerPage tell which window and page call. Nil allows every page MyGo lets call. They are asked before the name is looked up, so they may be called with a name nothing is exposed or registered under, and a page they refuse gets ErrDenied either way. They must be concurrency-safe.
 type Options struct {
 	AllowRead     func(ctx context.Context, state string) bool
 	AllowDispatch func(ctx context.Context, action string) bool
@@ -276,10 +276,11 @@ func (b *Bridge) Dispatch(ctx context.Context, name string, arg json.RawMessage)
 	switch {
 	case closed:
 		return ErrClosed
-	case !ok:
-		return fmt.Errorf("%w: action %q", ErrNotFound, name)
+	// The policy comes before the lookup, so a refused page cannot tell a registered name from a missing one.
 	case b.options.AllowDispatch != nil && !b.options.AllowDispatch(ctx, name):
 		return ErrDenied
+	case !ok:
+		return fmt.Errorf("%w: action %q", ErrNotFound, name)
 	}
 	return a.run(ctx, arg)
 }
@@ -292,10 +293,11 @@ func (b *Bridge) state(ctx context.Context, name string) (*exposure, error) {
 	switch {
 	case closed:
 		return nil, ErrClosed
-	case !ok:
-		return nil, fmt.Errorf("%w: state %q", ErrNotFound, name)
+	// The policy comes before the lookup, so a refused page cannot tell an exposed name from a missing one.
 	case b.options.AllowRead != nil && !b.options.AllowRead(ctx, name):
 		return nil, ErrDenied
+	case !ok:
+		return nil, fmt.Errorf("%w: state %q", ErrNotFound, name)
 	}
 	return e, nil
 }

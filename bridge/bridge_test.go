@@ -564,3 +564,59 @@ func TestAWatchOfANameExposedAgainSendsTheFirstFrame(t *testing.T) {
 	cancel()
 	_ = result(t, done)
 }
+
+// A page that a policy refuses gets ErrDenied whether or not the name is exposed or registered, so it cannot tell which names exist.
+func TestARefusedPageCannotTellWhichNamesExist(t *testing.T) {
+	store := nodra.New(state{})
+	defer func() { _ = store.Close() }()
+	var mu sync.Mutex
+	var asked []string
+	deny := func(_ context.Context, name string) bool {
+		mu.Lock()
+		asked = append(asked, name)
+		mu.Unlock()
+		return false
+	}
+	b := bridge.New(bridge.Options{AllowRead: deny, AllowDispatch: deny})
+	defer b.Close()
+	if _, err := bridge.Expose(b, "admin/secrets", store); err != nil {
+		t.Fatal(err)
+	}
+	ran := false
+	if _, err := bridge.Handle(b, "admin/wipe", func(context.Context, int) error { ran = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, name := range []string{"admin/secrets", "admin/other"} {
+		if _, err := b.Get(ctx, name); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Get(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+		if err := b.Watch(ctx, name, 0, func(bridge.Frame) error { return nil }); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Watch(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+	}
+	for _, name := range []string{"admin/wipe", "admin/nope"} {
+		if err := b.Dispatch(ctx, name, nil); !errors.Is(err, bridge.ErrDenied) || errors.Is(err, bridge.ErrNotFound) {
+			t.Errorf("Dispatch(%q) from a refused page returned %v, want ErrDenied", name, err)
+		}
+	}
+	if ran {
+		t.Error("a refused dispatch ran the action")
+	}
+	askedSoFar := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), asked...)
+	}
+	if got := askedSoFar(); len(got) != 6 {
+		t.Errorf("the policies were asked about %q, want every call", got)
+	}
+	// A closed bridge still answers ErrClosed without asking.
+	b.Close()
+	if _, err := b.Get(ctx, "admin/other"); !errors.Is(err, bridge.ErrClosed) {
+		t.Errorf("Get on a closed bridge returned %v", err)
+	}
+	if got := askedSoFar(); len(got) != 6 {
+		t.Errorf("a closed bridge asked the policy: %q", got)
+	}
+}

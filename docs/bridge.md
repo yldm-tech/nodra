@@ -54,7 +54,7 @@ b := bridge.New(bridge.Options{
 })
 ```
 
-A refused call fails with `ErrDenied`.
+A refused call fails with `ErrDenied`, whether or not anything is exposed or registered under the name, so a refused page cannot tell which names exist; the functions are therefore also asked about names nothing is exposed or registered under.
 
 ## JavaScript
 
