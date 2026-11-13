@@ -93,3 +93,28 @@ func TestReplaceFileDoesNotRetryOtherErrorsWindows(t *testing.T) {
 		t.Fatalf("replaceFile = %v, want a not-exist error without retries", err)
 	}
 }
+
+func TestFileStorageReadOnlyPrimaryStaysReadOnlyWhenReplaceFailsWindows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	storage := FileStorage{Path: path, Perm: 0400}
+	if err := storage.Save(context.Background(), []byte("one")); err != nil {
+		t.Fatal(err)
+	}
+	holdOpen(t, path)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	setReplaceRetryHook(t, func(error) { cancel() })
+	if err := storage.Save(ctx, []byte("two")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Save = %v, want context.Canceled", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0200 != 0 {
+		t.Fatalf("primary mode = %v after a failed replacement, want the read-only attribute restored", info.Mode().Perm())
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "one" {
+		t.Fatalf("primary = %q, %v; want the previous state", got, err)
+	}
+}
