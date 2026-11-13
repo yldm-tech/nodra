@@ -5,7 +5,12 @@ The bridge is an optional Go subpackage, `github.com/yldm-tech/nodra/bridge`, th
 Without it, an app keeps a second copy of its state in the frontend, in a JavaScript store, and keeps the two in step by hand with bound methods and events. With it, Go decides what each page may see and what it may do:
 
 - A page sees a state only as Go exposes it, as a whole or through a projection that leaves secrets and large internals in Go.
-- A page receives a new frame only when the value it sees changes. Frames coalesce into the latest only once MyGo's channel holds back sends, at about 1 MiB of frames the page has not taken per watch, so a slow page may still receive each intermediate change.
+- A page receives a new frame only when the value it sees changes. By default frames coalesce into the latest only once MyGo's channel holds back sends, at about 1 MiB of frames the page has not taken per watch, so a slow page may still receive each intermediate change. `Options.FrameInterval` sets the least time between two frames of a watch: changes within it coalesce into the latest, which is sent when it ends, and a change after a quiet spell goes at once. For state that changes faster than a page needs to show it, such as progress, playback position or streamed results, set it to a display frame:
+
+  ```go
+  b := bridge.New(bridge.Options{FrameInterval: 16 * time.Millisecond})
+  ```
+
 - A page changes state only by dispatching an action Go registered; it never writes a store.
 
 ## Go
