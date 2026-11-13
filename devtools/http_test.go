@@ -95,7 +95,7 @@ func TestHTTPRejectsInvalidRestoresAndMethods(t *testing.T) {
 		{"POST", "/api/restore", `{"storeId":"counter","state":{"count":"wrong"}}`, http.StatusBadRequest},
 		{"POST", "/api/restore", `{"storeId":"counter","sequence":999}`, http.StatusNotFound},
 		{"POST", "/api/restore", `{"storeId":"missing","state":{}}`, http.StatusNotFound},
-		{"POST", "/api/restore", strings.Repeat("x", i.restoreBodyLimit()+1), http.StatusRequestEntityTooLarge},
+		{"POST", "/api/restore", strings.Repeat("x", (1<<20)+(64<<10)+1), http.StatusRequestEntityTooLarge},
 	} {
 		if w := request(i, test.method, test.path, test.body); w.Code != test.status {
 			t.Errorf("%s %s status = %d, want %d", test.method, test.path, w.Code, test.status)
@@ -284,10 +284,30 @@ func TestHTTPApplyAcceptsEveryRestorableStateSize(t *testing.T) {
 }
 
 func TestHTTPRestoreBodyLimitStillBounded(t *testing.T) {
-	i := New(Options{AllowRestore: true, MaxStateBytes: 2 << 20})
-	defer func() { _ = i.Close() }()
-	mustAttach(t, i, "s", nodra.New(""))
-	if response := request(i, "POST", "/api/restore", strings.Repeat("x", i.restoreBodyLimit()+1)); response.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("oversize restore body got %d", response.Code)
+	// The expected limits are written out here rather than taken from restoreBodyLimit, so the test pins the policy: MaxStateBytes plus a 64 KiB envelope, never below 1 MiB.
+	for _, test := range []struct {
+		name          string
+		maxStateBytes int
+		limit         int
+	}{
+		{"default", 0, (1 << 20) + (64 << 10)},
+		{"raised", 2 << 20, (2 << 20) + (64 << 10)},
+		{"floor", 64, 1 << 20},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			i := New(Options{AllowRestore: true, MaxStateBytes: test.maxStateBytes})
+			defer func() { _ = i.Close() }()
+			mustAttach(t, i, "s", nodra.New(""))
+			if got := i.restoreBodyLimit(); got != test.limit {
+				t.Fatalf("restoreBodyLimit() = %d, want %d", got, test.limit)
+			}
+			// A body of exactly the limit is read and then rejected as malformed JSON; one byte more is rejected as too large.
+			if response := request(i, "POST", "/api/restore", strings.Repeat("x", test.limit)); response.Code != http.StatusBadRequest {
+				t.Fatalf("%d-byte restore body got %d, want %d", test.limit, response.Code, http.StatusBadRequest)
+			}
+			if response := request(i, "POST", "/api/restore", strings.Repeat("x", test.limit+1)); response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("%d-byte restore body got %d, want %d", test.limit+1, response.Code, http.StatusRequestEntityTooLarge)
+			}
+		})
 	}
 }
