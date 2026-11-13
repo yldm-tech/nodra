@@ -2,6 +2,9 @@ package core
 
 import (
 	"errors"
+	"maps"
+	"reflect"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -65,5 +68,95 @@ func TestAtomicGroupRejectsDuplicateStores(t *testing.T) {
 	store := New(0)
 	if err := AtomicGroup(AtomicUpdate(store, func(*int) error { return nil }), AtomicUpdate(store, func(*int) error { return nil })); err == nil {
 		t.Fatal("duplicate store accepted")
+	}
+}
+
+type retainedBox struct {
+	items []int
+	tags  map[string]int
+}
+
+func cloneRetainedBox(b retainedBox) retainedBox {
+	return retainedBox{items: slices.Clone(b.items), tags: maps.Clone(b.tags)}
+}
+
+func TestTransactionCommitsDoNotShareStateWithARetainedCandidate(t *testing.T) {
+	newStore := func() *Store[retainedBox] {
+		return NewWithClone(retainedBox{items: []int{1}, tags: map[string]int{"a": 1}}, cloneRetainedBox)
+	}
+	edit := func(retained **retainedBox) func(*retainedBox) {
+		return func(b *retainedBox) { *retained = b; b.items[0] = 2; b.tags["a"] = 2 }
+	}
+	paths := []struct {
+		name   string
+		commit func(*Store[retainedBox], func(*retainedBox)) error
+	}{
+		{"AtomicGroup", func(s *Store[retainedBox], fn func(*retainedBox)) error {
+			return AtomicGroup(AtomicUpdate(s, func(b *retainedBox) error { fn(b); return nil }))
+		}},
+		{"Atomic2", func(s *Store[retainedBox], fn func(*retainedBox)) error {
+			return Atomic2(s, New(0), func(b *retainedBox, other *int) error { fn(b); *other = 1; return nil })
+		}},
+		{"Update", func(s *Store[retainedBox], fn func(*retainedBox)) error { return s.Update(fn) }},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			store := newStore()
+			defer func() { _ = store.Close() }()
+			var retained *retainedBox
+			requireNoError(t, path.commit(store, edit(&retained)))
+			version := store.Version()
+			retained.items[0] = 99
+			retained.tags["a"] = 99
+			got := store.Get()
+			if got.items[0] != 2 || got.tags["a"] != 2 || store.Version() != version {
+				t.Fatalf("a retained candidate changed owned state: items %v tags %v version %d, want [2] map[a:2] version %d", got.items, got.tags, store.Version(), version)
+			}
+		})
+	}
+}
+
+func TestAtomicGroupAndAtomic2RejectOneClosedParticipant(t *testing.T) {
+	// AtomicGroup prepares its participants in store address order, whatever the argument order, so closedLow decides which one it prepares first: with closedLow the closed store is rejected before the open store's callback runs, without it the open store is prepared and then the closed one is rejected. Atomic2 checks both stores before its callback, in argument order.
+	paths := []struct {
+		name      string
+		closedLow bool
+		run       func(open, closed *Store[int]) error
+	}{
+		{"AtomicGroup open prepared first", false, func(open, closed *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }), AtomicUpdate(open, func(v *int) error { *v = 2; return nil }))
+		}},
+		{"AtomicGroup closed prepared first", true, func(open, closed *Store[int]) error {
+			return AtomicGroup(AtomicUpdate(open, func(v *int) error { *v = 2; return nil }), AtomicUpdate(closed, func(v *int) error { *v = 20; return nil }))
+		}},
+		{"Atomic2", false, func(open, closed *Store[int]) error {
+			return Atomic2(open, closed, func(a, b *int) error { *a, *b = 2, 20; return nil })
+		}},
+		{"Atomic2 closed first", false, func(open, closed *Store[int]) error {
+			return Atomic2(closed, open, func(a, b *int) error { *a, *b = 20, 2; return nil })
+		}},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			low, high := New(0), New(0)
+			if reflect.ValueOf(high).Pointer() < reflect.ValueOf(low).Pointer() {
+				low, high = high, low
+			}
+			open, closed := low, high
+			if path.closedLow {
+				open, closed = high, low
+			}
+			requireNoError(t, open.Set(1))
+			requireNoError(t, closed.Set(10))
+			defer func() { _ = open.Close() }()
+			requireNoError(t, closed.Close())
+			openVersion, closedVersion := open.Version(), closed.Version()
+			if err := path.run(open, closed); !errors.Is(err, ErrClosed) {
+				t.Fatalf("err = %v, want ErrClosed", err)
+			}
+			if open.Get() != 1 || closed.Get() != 10 || open.Version() != openVersion || closed.Version() != closedVersion {
+				t.Fatalf("state changed: open %d v%d (want 1 v%d), closed %d v%d (want 10 v%d)", open.Get(), open.Version(), openVersion, closed.Get(), closed.Version(), closedVersion)
+			}
+		})
 	}
 }

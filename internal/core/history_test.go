@@ -86,3 +86,25 @@ func TestHistoryOutlivesClosedSourceStore(t *testing.T) {
 		t.Fatalf("status after history close %+v", state)
 	}
 }
+
+func TestHistoryNestedGroupJoinsTheOuterStep(t *testing.T) {
+	store := New(0)
+	history := Track(store, 10)
+	defer func() { _ = history.Close() }()
+	end, err := history.BeginGroup()
+	requireNoError(t, err)
+	requireNoError(t, store.Set(1))
+	// The inner group opens after the outer group has recorded a step, so it must keep adding to that step rather than start another.
+	inner, err := history.BeginGroup()
+	requireNoError(t, err)
+	requireNoError(t, store.Set(2))
+	inner()
+	end()
+	requireNoError(t, history.Undo())
+	if got := store.Get(); got != 0 {
+		t.Fatalf("undo restored %d, want 0", got)
+	}
+	if history.CanUndo() {
+		t.Fatal("the nested group recorded a second undo step")
+	}
+}

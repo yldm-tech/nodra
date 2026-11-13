@@ -50,9 +50,8 @@ func AtomicUpdate[T any](store *Store[T], fn func(*T) error) AtomicOp {
 					if err := fn(&next); err != nil {
 						return err
 					}
-					// Clone before any participant is committed. A clone panic therefore cannot leave an earlier participant visible.
-					next = store.copy(next)
-					prepared = next
+					// Clone before any participant is committed. A clone panic therefore cannot leave an earlier participant visible. Clone into prepared, not back into next: the callback may retain its candidate, which must not alias owned state.
+					prepared = store.copy(next)
 					return nil
 				},
 				commit: func(transactionID uint64) atomicNotification {
