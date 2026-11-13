@@ -11,6 +11,7 @@
 ### Bug Fixes
 
 * **async:** retry backoff saturates instead of overflowing, so `MaxBackoff` still bounds every delay when `MaxAttempts` is large; canceling, superseding or closing during a backoff delay no longer starts one more work attempt with a canceled context
+* **scope:** a late `Scope.Observe` contains a panicking stop function and returns `ErrClosed` joined with a `PanicError`, like a late `Defer`
 
 ### Dependencies
 
