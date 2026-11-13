@@ -95,7 +95,7 @@ func TestHTTPRejectsInvalidRestoresAndMethods(t *testing.T) {
 		{"POST", "/api/restore", `{"storeId":"counter","state":{"count":"wrong"}}`, http.StatusBadRequest},
 		{"POST", "/api/restore", `{"storeId":"counter","sequence":999}`, http.StatusNotFound},
 		{"POST", "/api/restore", `{"storeId":"missing","state":{}}`, http.StatusNotFound},
-		{"POST", "/api/restore", strings.Repeat("x", (1<<20)+1), http.StatusRequestEntityTooLarge},
+		{"POST", "/api/restore", strings.Repeat("x", (1<<20)+(64<<10)+1), http.StatusRequestEntityTooLarge},
 	} {
 		if w := request(i, test.method, test.path, test.body); w.Code != test.status {
 			t.Errorf("%s %s status = %d, want %d", test.method, test.path, w.Code, test.status)
@@ -249,5 +249,65 @@ func TestRemoteReadOnlyRequiresRestoreDisabled(t *testing.T) {
 	defer func() { _ = i.Close() }()
 	if _, err := i.ListenRemoteReadOnly("127.0.0.1:0"); err != ErrReadOnly {
 		t.Fatalf("remote restore option error = %v", err)
+	}
+}
+
+func TestHTTPApplyAcceptsEveryRestorableStateSize(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		maxStateBytes int
+		size          int
+	}{
+		{"raised limit", 4 << 20, 2 << 20},
+		{"default limit edge", 0, (1 << 20) - 16},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			i := New(Options{AllowRestore: true, MaxStateBytes: test.maxStateBytes})
+			defer func() { _ = i.Close() }()
+			store := nodra.New(strings.Repeat("a", test.size))
+			mustAttach(t, i, "s", store)
+			if !i.Snapshot().Stores[0].Restorable {
+				t.Fatalf("precondition: store not restorable: %+v", i.Snapshot().Stores[0])
+			}
+			edited, err := json.Marshal(strings.Repeat("b", test.size))
+			mustUpdate(t, err)
+			body, err := json.Marshal(map[string]any{"storeId": "s", "state": json.RawMessage(edited)})
+			mustUpdate(t, err)
+			if response := request(i, "POST", "/api/restore", string(body)); response.Code != http.StatusNoContent {
+				t.Fatalf("Apply of a %d-byte restorable state (%d-byte body) got %d: %s", len(edited), len(body), response.Code, strings.TrimSpace(response.Body.String()))
+			}
+			if got := store.Get(); len(got) != test.size || got[0] != 'b' {
+				t.Fatal("state not applied")
+			}
+		})
+	}
+}
+
+func TestHTTPRestoreBodyLimitStillBounded(t *testing.T) {
+	// The expected limits are written out here rather than taken from restoreBodyLimit, so the test pins the policy: MaxStateBytes plus a 64 KiB envelope, never below 1 MiB.
+	for _, test := range []struct {
+		name          string
+		maxStateBytes int
+		limit         int
+	}{
+		{"default", 0, (1 << 20) + (64 << 10)},
+		{"raised", 2 << 20, (2 << 20) + (64 << 10)},
+		{"floor", 64, 1 << 20},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			i := New(Options{AllowRestore: true, MaxStateBytes: test.maxStateBytes})
+			defer func() { _ = i.Close() }()
+			mustAttach(t, i, "s", nodra.New(""))
+			if got := i.restoreBodyLimit(); got != test.limit {
+				t.Fatalf("restoreBodyLimit() = %d, want %d", got, test.limit)
+			}
+			// A body of exactly the limit is read and then rejected as malformed JSON; one byte more is rejected as too large.
+			if response := request(i, "POST", "/api/restore", strings.Repeat("x", test.limit)); response.Code != http.StatusBadRequest {
+				t.Fatalf("%d-byte restore body got %d, want %d", test.limit, response.Code, http.StatusBadRequest)
+			}
+			if response := request(i, "POST", "/api/restore", strings.Repeat("x", test.limit+1)); response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("%d-byte restore body got %d, want %d", test.limit+1, response.Code, http.StatusRequestEntityTooLarge)
+			}
+		})
 	}
 }

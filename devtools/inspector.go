@@ -40,7 +40,8 @@ type Options struct {
 	// RequestsPerSecond limits authenticated API requests in a fixed one-second window. Zero disables the limit.
 	RequestsPerSecond int
 	AllowRestore      bool
-	Redact            func(storeID string, state json.RawMessage) (json.RawMessage, error)
+	// Redact filters each encoded state before retention. A returned error or a panic does not reach the Store write or Attach that triggered it: the state is not retained, the store is not restorable, and the inspection error is the callback's error or, for a panic, the fixed text "state redaction failed" (the panic value is discarded).
+	Redact func(storeID string, state json.RawMessage) (json.RawMessage, error)
 	// RedactMetadata filters names, task keys and error text before retention, including snapshots and pending progress. It must be concurrency-safe. Failure or panic discards all original metadata and records a fixed diagnostic. Store IDs are application-supplied public labels and are not filtered.
 	RedactMetadata func(storeID string, metadata Metadata) (Metadata, error)
 }
@@ -319,7 +320,7 @@ func joinMessages(a, b string) string {
 func (i *Inspector) encode(id string, value any) (json.RawMessage, string) {
 	raw, err := json.Marshal(value)
 	if err == nil && i.options.Redact != nil {
-		raw, err = i.options.Redact(id, raw)
+		raw, err = i.redactState(id, raw)
 	}
 	if err != nil {
 		return nil, err.Error()
@@ -389,7 +390,8 @@ func (i *Inspector) Record(id string, event CustomEvent) error {
 	if node == nil {
 		return ErrNotFound
 	}
-	retained := i.redactEvent(Event{StoreID: id, Generation: node.view.Generation, Kind: event.Kind, Name: event.Name, Key: event.Key, Error: event.Error, Data: bytes.Clone(event.Data), At: event.At})
+	// record applies RedactMetadata exactly once, as it does for captured events.
+	retained := Event{StoreID: id, Generation: node.view.Generation, Kind: event.Kind, Name: event.Name, Key: event.Key, Error: event.Error, Data: bytes.Clone(event.Data), At: event.At}
 	if retained.At.IsZero() {
 		retained.At = time.Now().UTC()
 	}
@@ -408,6 +410,10 @@ func (i *Inspector) Search(query string, limit int) []uint64 {
 	var matches map[uint64]struct{}
 	for _, term := range terms {
 		current := i.search[term]
+		if len(current) == 0 {
+			// A term with no retained events makes the conjunction empty; it must not be skipped as if it were the first term.
+			return nil
+		}
 		if matches == nil {
 			matches = maps.Clone(current)
 		} else {
@@ -475,8 +481,7 @@ func (i *Inspector) Snapshot() Snapshot {
 	}
 	sort.Slice(result.Stores, func(a, b int) bool { return result.Stores[a].ID < result.Stores[b].ID })
 	for n, event := range i.events {
-		event.State, event.Previous = bytes.Clone(event.State), bytes.Clone(event.Previous)
-		result.Events[n] = event
+		result.Events[n] = copyEvent(event)
 	}
 	return result
 }

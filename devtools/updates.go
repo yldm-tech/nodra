@@ -90,9 +90,12 @@ func pageLimit(limit int) int {
 	}
 	return min(limit, 200)
 }
+
+// copyEvent detaches every JSON buffer of an exported event from retained history.
 func copyEvent(event Event) Event {
 	event.State = bytes.Clone(event.State)
 	event.Previous = bytes.Clone(event.Previous)
+	event.Data = bytes.Clone(event.Data)
 	return event
 }
 

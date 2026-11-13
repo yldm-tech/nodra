@@ -1,5 +1,13 @@
 package devtools
 
+import (
+	"encoding/json"
+	"errors"
+)
+
+// errStateRedactionFailed replaces a panic from Options.Redact. The panic value is discarded because it may contain the state being redacted.
+var errStateRedactionFailed = errors.New("state redaction failed")
+
 // Run application callbacks before taking Inspector.mu; redactors may inspect the inspector. Never retain callback errors, which may themselves contain sensitive input.
 func (i *Inspector) redactEvent(event Event) Event {
 	if i.options.RedactMetadata == nil {
@@ -21,4 +29,14 @@ func (i *Inspector) redactMetadata(id string, original Metadata) (result Metadat
 		result = filtered
 	}
 	return result
+}
+
+// redactState runs Options.Redact on the notifying goroutine and contains its panics, so a faulty redactor becomes an inspection error instead of escaping into the application's Store write or Attach.
+func (i *Inspector) redactState(id string, raw json.RawMessage) (result json.RawMessage, err error) {
+	defer func() {
+		if recover() != nil {
+			result, err = nil, errStateRedactionFailed
+		}
+	}()
+	return i.options.Redact(id, raw)
 }
