@@ -55,7 +55,7 @@ type Frame struct {
 	Value   json.RawMessage `json:"value"`
 }
 
-// Bridge holds the states and actions exposed to pages. Its methods are safe for concurrent use.
+// Bridge holds the states and actions exposed to pages. Its methods are safe for concurrent use. Until it closes, it remembers every name a state was exposed under, so that a watch of a name exposed again sends its first frame (see Watch); an app that exposes a growing number of distinct names keeps a small entry for each.
 type Bridge struct {
 	options Options
 	service *service
@@ -65,7 +65,7 @@ type Bridge struct {
 	done    chan struct{}
 	states  map[string]*exposure
 	actions map[string]*action
-	// exposed holds every name a state has been exposed under, so a later exposure under the name knows that pages may hold versions of another source.
+	// exposed holds every name a state has been exposed under until the bridge closes, so a later exposure under the name knows that pages may hold versions of another source.
 	exposed map[string]struct{}
 }
 
@@ -121,6 +121,8 @@ func (b *Bridge) Close() {
 		delete(b.states, name)
 	}
 	clear(b.actions)
+	// Nothing is exposed after Close, so the names exposed before are not needed.
+	clear(b.exposed)
 }
 
 // Expose makes source readable by pages under name, as it is: its value must encode as JSON, and every field the encoding includes reaches the pages. Use ExposeProjection to send them only part of it. The returned function stops the exposure, which ends the pages' watches of it; it is safe to call more than once.

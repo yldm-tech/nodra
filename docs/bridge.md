@@ -40,7 +40,7 @@ b.Bind() // the service Nodra; BindAs("Other") for another name
 
 `Handle` decodes the JSON argument a page dispatches into the handler's argument type, a missing or `null` one into its zero value, and calls the handler with the call's context, which MyGo cancels when the page navigates away or its window closes. The handler changes state through the app's stores like any other code, so the bridge adds no second way to write state, and history, persistence and DevTools see the change as usual. The handler's error rejects the page's promise.
 
-State names and action names are separate: the same name may be both. A name is taken until its stop function runs or the bridge closes; `ErrExists` reports a second use.
+State names and action names are separate: the same name may be both. A name is taken until its stop function runs or the bridge closes; `ErrExists` reports a second use. Until it closes, a bridge remembers every name a state was exposed under, so that a watch of a name exposed again sends its first frame (see the service below); an app that exposes a growing number of distinct names, such as one per document, keeps a small entry for each.
 
 ### Which pages may call
 
