@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,5 +43,44 @@ func TestSearchRequiresEveryTermIncludingAbsentFirstTerm(t *testing.T) {
 		if got := i.Search(query, 10); len(got) != 0 {
 			t.Errorf("Search(%q) = %v, want no matches", query, got)
 		}
+	}
+}
+
+func TestRecordRedactsCustomMetadataOnce(t *testing.T) {
+	var calls atomic.Int32
+	var counting atomic.Bool
+	i := New(Options{RedactMetadata: func(_ string, m Metadata) (Metadata, error) {
+		if counting.Load() {
+			calls.Add(1)
+		}
+		if m.Name != "" {
+			m.Name = "h(" + m.Name + ")"
+		}
+		return m, nil
+	}})
+	defer func() { _ = i.Close() }()
+	store := nodra.New(counterState{})
+	mustAttach(t, i, "counter", store)
+	mustUpdate(t, store.Do("secret", func(v *counterState) error { v.Count++; return nil }))
+	counting.Store(true)
+	mustUpdate(t, i.Record("counter", CustomEvent{Kind: "custom", Name: "secret", Data: json.RawMessage(`{}`)}))
+	counting.Store(false)
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("RedactMetadata calls for one Record = %d, want 1", n)
+	}
+	var mutation, custom string
+	for _, event := range i.Snapshot().Events {
+		switch event.Kind {
+		case "mutation":
+			mutation = event.Name
+		case "custom":
+			custom = event.Name
+		}
+	}
+	if mutation != "h(secret)" || custom != mutation {
+		t.Fatalf("mutation name %q, custom name %q", mutation, custom)
+	}
+	if got := i.Search("custom h(secret)", 10); len(got) != 1 {
+		t.Fatalf("custom event not indexed under its redacted name: %v", got)
 	}
 }

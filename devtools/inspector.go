@@ -389,7 +389,8 @@ func (i *Inspector) Record(id string, event CustomEvent) error {
 	if node == nil {
 		return ErrNotFound
 	}
-	retained := i.redactEvent(Event{StoreID: id, Generation: node.view.Generation, Kind: event.Kind, Name: event.Name, Key: event.Key, Error: event.Error, Data: bytes.Clone(event.Data), At: event.At})
+	// record applies RedactMetadata exactly once, as it does for captured events.
+	retained := Event{StoreID: id, Generation: node.view.Generation, Kind: event.Kind, Name: event.Name, Key: event.Key, Error: event.Error, Data: bytes.Clone(event.Data), At: event.At}
 	if retained.At.IsZero() {
 		retained.At = time.Now().UTC()
 	}
