@@ -53,3 +53,36 @@ func TestHistoryCanUndoRedoFollowGroups(t *testing.T) {
 		t.Fatal("history flags after group")
 	}
 }
+
+func TestHistoryOutlivesClosedSourceStore(t *testing.T) {
+	store := New(0)
+	history := Track(store, 10)
+	requireNoError(t, store.Set(1))
+	requireNoError(t, store.Set(2))
+	requireNoError(t, history.Undo())
+	requireNoError(t, store.Close())
+	if err := history.Undo(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("undo after store close error = %v", err)
+	}
+	if err := history.Redo(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("redo after store close error = %v", err)
+	}
+	status := history.Status()
+	if state := status.Get(); !history.CanUndo() || !history.CanRedo() || !state.CanUndo || !state.CanRedo || state.Closed {
+		t.Fatalf("CanUndo=%v CanRedo=%v after store close; status %+v", history.CanUndo(), history.CanRedo(), state)
+	}
+	select {
+	case <-status.Done():
+		t.Fatal("closing the source store closed the history status")
+	default:
+	}
+	requireNoError(t, history.Close())
+	select {
+	case <-status.Done():
+	default:
+		t.Fatal("closing history left its status open")
+	}
+	if state := status.Get(); !state.Closed || state.CanUndo || state.CanRedo {
+		t.Fatalf("status after history close %+v", state)
+	}
+}
