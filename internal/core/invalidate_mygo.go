@@ -11,6 +11,7 @@ func InvalidateProjection[T, V any](source Reader[T], window *mygo.Window, proje
 	return InvalidateProjectionWith(source, window, project, SelectorOptions[V]{})
 }
 
+// InvalidateProjectionWith is InvalidateProjection with custom equality and optional immediate invalidation from options. Nil inputs and destroyed windows subscribe to nothing. As with Invalidate, the subscription stops when the window closes, the returned function is idempotent, and stopping does not wait for callbacks already running.
 func InvalidateProjectionWith[T, V any](source Reader[T], window *mygo.Window, project func(T) V, options SelectorOptions[V]) func() {
 	store := sourceStore(source)
 	if store == nil || window == nil || project == nil {

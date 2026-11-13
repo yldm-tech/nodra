@@ -108,11 +108,20 @@ The optional `bridge` subpackage makes a Store the one source of truth for nativ
 
 ```go
 persistence := nodra.NewPersistence(store, nodra.FileStorage{Path: "state.json", Backup: true}, nodra.JSONCodec[State]{})
-if err := persistence.Load(ctx); err != nil {
-	// Handle a missing or invalid startup file before starting autosave.
+// A missing file is a first start. Stop on any other load error: autosave would overwrite the file.
+if err := persistence.Load(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	return err
 }
-writer, _ := persistence.AutoSaveAsync(ctx, nodra.AsyncOptions{Debounce: 100 * time.Millisecond})
-defer writer.Close(shutdownCtx)
+writer, err := persistence.AutoSaveAsync(ctx, nodra.AsyncOptions{Debounce: 100 * time.Millisecond})
+if err != nil {
+	return err
+}
+defer func() {
+	if err := writer.Close(shutdownCtx); err != nil {
+		// The store still owns the data: retry with persistence.Save using a fresh context, or report the error.
+		log.Printf("save state: %v", err)
+	}
+}()
 ```
 
 Use `VersionedJSONCodec`, `AESGCMCodec`, `Journal`, `Durable` and `WithConflictDetection` when the application needs migrations, encryption or stronger file recovery guarantees. Details are in [`docs/architecture.md`](docs/architecture.md).
