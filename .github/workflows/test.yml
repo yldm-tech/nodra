@@ -156,6 +156,38 @@ jobs:
           go test -run '^$' -fuzz=FuzzHistoryStateMachine -fuzztime=10s -parallel=2 ./internal/core
           go test -run '^$' -bench=. -benchtime=1x ./...
 
+  # The other Go jobs follow go.mod's toolchain line, so they never build with the minimum that consumers get from the go line and docs/support.md. This job runs that minimum, and GOTOOLCHAIN names it exactly so the toolchain line cannot switch it to a newer release.
+  go-minimum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve minimum Go version from go.mod
+        id: minimum
+        run: |
+          version=$(awk '$1 == "go" { print $2; exit }' go.mod)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=go.mod::the go line must name a full release such as 1.27.3, got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "GOTOOLCHAIN=go$version" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.minimum.outputs.version }}
+      - name: Verify the minimum toolchain is in use
+        env:
+          EXPECTED: go${{ steps.minimum.outputs.version }}
+        run: |
+          actual=$(go env GOVERSION)
+          if [[ "$actual" != "$EXPECTED" ]]; then
+            echo "::error::go reports $actual, expected $EXPECTED"
+            exit 1
+          fi
+          go version
+      - run: go vet ./...
+      - run: go test ./...
+
   lint:
     runs-on: ubuntu-latest
     steps:
