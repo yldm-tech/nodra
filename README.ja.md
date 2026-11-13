@@ -64,6 +64,8 @@ func (app *App) view(c *ui.Context) {
 
 オプションの `nativeui` サブパッケージは、ウィンドウの取り消しとやり直しを `History` に結び付けます。ショートカットと、MyGo 0.7.4 以降の macOS では Edit メニューの項目も対象で、履歴が操作できるときだけ有効になります。フォーカス中のテキスト入力は独自の取り消しを保ちます。コアから分かれているため、ネイティブ UI を使わないアプリは MyGo の `ui` パッケージをリンクしません。
 
+Store を共有するだけでウィンドウを開かないサービスや CLI は `-tags nodra_nomygo` でビルドできます。`*mygo.Window` を受け取るヘルパーが除かれ（`InvalidateTarget` は残ります）、MyGo がリンクされないため、`CGO_ENABLED=0` の Linux ビルドは静的実行ファイルになります。このタグはビルド全体に効きます。`nativeui` や、これらのヘルパーを呼ぶライブラリはこのタグではコンパイルできず、`bridge` を使うと MyGo が再びリンクされます。詳しくは [`docs/support.md`](docs/support.md) を参照してください。
+
 ## Web ページ
 
 ```go

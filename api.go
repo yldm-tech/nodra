@@ -3,7 +3,6 @@ package nodra
 import (
 	"context"
 
-	"github.com/egoist/mygo"
 	core "github.com/yldm-tech/nodra/internal/core"
 )
 
@@ -198,26 +197,6 @@ func NewAsyncActionWithOptions[T, I, R any](store *Store[T], name string, work f
 
 func NewScope() *Scope { return core.NewScope() }
 
-func Invalidate[T any](source Observable[T], window *mygo.Window) func() {
-	return core.Invalidate(source, window)
-}
-
 func InvalidateTarget[T any](source Observable[T], target InvalidationTarget) func() {
 	return core.InvalidateTarget(source, target)
-}
-
-func InvalidateSelector[T, V any](source Observable[T], window *mygo.Window, selector func(T) V) func() {
-	return core.InvalidateSelector(source, window, selector)
-}
-
-func InvalidateSelectorWith[T, V any](source Observable[T], window *mygo.Window, selector func(T) V, options SelectorOptions[V]) func() {
-	return core.InvalidateSelectorWith(source, window, selector, options)
-}
-
-func InvalidateProjection[T, V any](source Reader[T], window *mygo.Window, project func(T) V) func() {
-	return core.InvalidateProjection(source, window, project)
-}
-
-func InvalidateProjectionWith[T, V any](source Reader[T], window *mygo.Window, project func(T) V, options SelectorOptions[V]) func() {
-	return core.InvalidateProjectionWith(source, window, project, options)
 }

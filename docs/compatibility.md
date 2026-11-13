@@ -26,6 +26,8 @@ Deprecations name the replacement and remain in Go documentation. Removal requir
 
 The module follows Go module major-version rules. A future v2 module will use a `/v2` module path; v1 keeps the current `github.com/yldm-tech/nodra` path. Applications should pin a release and avoid depending on unexported fields or generated DevTools assets.
 
+The `nodra_nomygo` build tag is part of the v1 contract: without it the API is the full documented one, and with it the five root helpers that take a `*mygo.Window` (`Invalidate`, `InvalidateSelector`, `InvalidateSelectorWith`, `InvalidateProjection` and `InvalidateProjectionWith`) are left out. Because the tag applies to the whole build, any package in it that calls those helpers, including `nativeui` and third-party libraries, does not compile with the tag; `bridge` compiles but links MyGo itself. The v2 module plans to drop the MyGo import from the root package, so the tag will no longer be needed there; MyGo will remain only in the `bridge` and `nativeui` integrations.
+
 ## Current status
 
 Version [v1.0.0](https://github.com/yldm-tech/nodra/releases/tag/v1.0.0) was published on 2026-10-25. The stable compatibility promises now apply to the exported root-package and DevTools APIs reviewed in [public-api.md](public-api.md), including `AtomicGroup`. Release verification and publication evidence are recorded in [release-1.0.md](release-1.0.md).

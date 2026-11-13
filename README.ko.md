@@ -64,6 +64,8 @@ func (app *App) view(c *ui.Context) {
 
 선택적 `nativeui` 하위 패키지는 창의 실행 취소와 다시 실행을 `History`에 연결합니다. 단축키와, MyGo 0.7.4부터 macOS에서는 Edit 메뉴 항목도 포함되며, 기록이 실행할 수 있을 때만 활성화됩니다. 포커스된 텍스트 입력은 자체 실행 취소를 유지합니다. 코어와 분리되어 있어 네이티브 UI가 없는 앱은 MyGo의 `ui` 패키지를 링크하지 않습니다.
 
+Store를 공유하지만 창을 열지 않는 서비스와 CLI는 `-tags nodra_nomygo`로 빌드할 수 있습니다. `*mygo.Window`를 받는 헬퍼가 빠지고(`InvalidateTarget`은 남습니다) MyGo가 링크되지 않으므로, `CGO_ENABLED=0` Linux 빌드는 정적 실행 파일이 됩니다. 이 태그는 빌드 전체에 적용됩니다. `nativeui`나 이 헬퍼를 호출하는 라이브러리는 이 태그로 컴파일되지 않으며, `bridge`는 MyGo를 다시 링크합니다. 자세한 내용은 [`docs/support.md`](docs/support.md)를 참고하세요.
+
 ## 웹 페이지
 
 ```go

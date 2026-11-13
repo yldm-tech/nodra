@@ -150,6 +150,24 @@ jobs:
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...
       - if: runner.os == 'Linux'
         run: CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build ./...
+      # With nodra_nomygo the core and DevTools must not link MyGo, whose purego fakecgo makes a CGO_ENABLED=0 Linux build dynamically linked against glibc.
+      - if: runner.os == 'Linux'
+        name: Static build without MyGo (nodra_nomygo)
+        run: |
+          go vet -tags nodra_nomygo . ./devtools
+          go test -tags nodra_nomygo . ./devtools
+          deps=$(CGO_ENABLED=0 GOOS=linux go list -deps -tags nodra_nomygo . ./devtools ./examples/basic)
+          if grep -E '^github\.com/(egoist|ebitengine)/' <<< "$deps"; then
+            echo "::error::the nodra_nomygo build still depends on MyGo or purego"
+            exit 1
+          fi
+          CGO_ENABLED=0 GOOS=linux go build -tags nodra_nomygo -o "$RUNNER_TEMP/nodra-basic" ./examples/basic
+          headers=$(readelf -lW "$RUNNER_TEMP/nodra-basic")
+          if grep -q INTERP <<< "$headers"; then
+            echo "::error::the nodra_nomygo CGO_ENABLED=0 linux build of examples/basic has a PT_INTERP header"
+            exit 1
+          fi
+          echo "examples/basic is statically linked with -tags nodra_nomygo"
       - if: runner.os == 'Linux'
         run: |
           go test -run '^$' -fuzz=FuzzVersionedJSONDecode -fuzztime=10s -parallel=2 ./internal/core
