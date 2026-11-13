@@ -73,13 +73,15 @@ func (p *Persistence[T]) Load(ctx context.Context) error {
 	return p.load(ctx, false)
 }
 
-// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation and a closed Store stop before attempting the backup.
+// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation, a closed Store and an invalid configuration detected before reading stop before attempting the backup.
 func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
 	primary := p.Load(ctx)
 	if primary == nil {
 		return nil
 	}
-	if errors.Is(primary, ErrInvalidPersistence) || errors.Is(primary, context.Canceled) || errors.Is(primary, context.DeadlineExceeded) || errors.Is(primary, ErrClosed) {
+	// Codecs and storages also wrap ErrInvalidPersistence for damaged data, such as a malformed version envelope. Those failures arrive as a LoadError and must fall back to the backup; only a configuration error returned before any read is final.
+	var loadErr *LoadError
+	if (errors.Is(primary, ErrInvalidPersistence) && !errors.As(primary, &loadErr)) || errors.Is(primary, context.Canceled) || errors.Is(primary, context.DeadlineExceeded) || errors.Is(primary, ErrClosed) {
 		return primary
 	}
 	if ctx != nil {

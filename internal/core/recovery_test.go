@@ -138,3 +138,45 @@ func TestPersistenceLoadWithRecoveryKeepsConfigurationErrorsTyped(t *testing.T) 
 		t.Fatalf("nil persistence = %v", err)
 	}
 }
+
+// VersionedJSONCodec reports damaged envelopes with ErrInvalidPersistence. A damaged primary is still a load failure, so LoadWithRecovery must fall back to the backup instead of treating it as a configuration error.
+func TestPersistenceLoadWithRecoveryUsesBackupForInvalidEnvelope(t *testing.T) {
+	type state struct{ N int }
+	for name, primary := range map[string]string{
+		"incomplete envelope": `{"schemaVersion": 2}`,
+		"unversioned payload": `{"N": 5}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			path := filepath.Join(t.TempDir(), "state.json")
+			storage := FileStorage{Path: path, Backup: true}
+			codec := VersionedJSONCodec[state]{Version: 2}
+			requireNoError(t, NewPersistence(New(state{N: 7}), storage, codec).Save(ctx))
+			requireNoError(t, os.WriteFile(path, []byte(primary), 0600))
+			restored := New(state{})
+			p := NewPersistence(restored, storage, codec)
+			if err := p.Load(ctx); !errors.Is(err, ErrInvalidPersistence) {
+				t.Fatalf("primary load = %v, want ErrInvalidPersistence", err)
+			}
+			if err := p.LoadWithRecovery(ctx); err != nil {
+				t.Fatalf("recovery = %v", err)
+			}
+			if got := restored.Get(); got.N != 7 {
+				t.Fatalf("restored = %+v, want backup state", got)
+			}
+		})
+	}
+}
+
+// When the backup fails too, the codec's error identity stays visible through RecoveryError.
+func TestPersistenceLoadWithRecoveryKeepsInvalidEnvelopeIdentity(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.json")
+	requireNoError(t, os.WriteFile(path, []byte(`{"schemaVersion": 2}`), 0600))
+	err := NewPersistence(New(0), FileStorage{Path: path}, VersionedJSONCodec[int]{Version: 2}).LoadWithRecovery(ctx)
+	var recovery *RecoveryError
+	var load *LoadError
+	if !errors.As(err, &recovery) || !errors.Is(err, ErrInvalidPersistence) || !errors.Is(err, ErrNoBackup) || !errors.As(err, &load) || load.Stage != "decode" {
+		t.Fatalf("recovery = %v", err)
+	}
+}
