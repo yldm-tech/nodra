@@ -62,10 +62,13 @@ func main() {
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
 })
-defer stop()
 ```
 
 La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para una ventana nativa mínima.

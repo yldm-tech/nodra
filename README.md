@@ -62,10 +62,13 @@ func main() {
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
 })
-defer stop()
 ```
 
 The integration targets MyGo `v0.7.4`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.

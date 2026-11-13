@@ -62,10 +62,13 @@ func main() {
 ## MyGo
 
 ```go
-stop := nodra.InvalidateSelector(store, window, func(s State) int {
-	return s.Count
+mygo.App.WhenReady(func() {
+	window := mygo.NewWindow(mygo.WindowOptions{Title: "Counter", Content: ui.View(view)})
+	// Redraws stop when the window closes. Keep the returned stop only to end them sooner: a defer here would end them as soon as WhenReady returns.
+	nodra.InvalidateSelector(store, window, func(s State) int {
+		return s.Count
+	})
 })
-defer stop()
 ```
 
 MyGo 대상 버전은 `v0.7.4`입니다. 임시 위젯 상태는 뷰 소유자에 두고 공유 Store에는 수정된 필드만 반영하세요. 최소 네이티브 창 예제는 [`examples/mygo`](examples/mygo/main.go)에서 확인할 수 있습니다.

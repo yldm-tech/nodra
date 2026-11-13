@@ -46,6 +46,8 @@
 
 ### Documentation
 
+* **bridge:** docs/bridge.md declares the `PageState` its Go example exposes, with the `json:"count"` tag its React example reads as `state?.count`; an untagged field is sent as `Count`, so a page written from the document showed its placeholder forever. A test checks that the page reads keys the documented type is sent with
+* the copy-on-write `UpdateErr` example in docs/architecture.md copies the map with `make` and `maps.Copy` instead of `maps.Clone`, which returns nil for a nil map, so the example no longer panics on its first update of a zero-value state; a test now runs the example and keeps the document identical to it
 * **core:** state that a derived value with a nil equals function notifies on every accepted source version, and that an equality function is what filters unchanged values
 * document every root-package function in Go doc; index `Define`, `DefineWithClone`, `Definition`, `BindField`, `Field`, `Derived`, `NewMemoryKeyProvider`, `NewScope` and the MyGo invalidation helpers in docs/public-api.md; list the methods of every re-exported type under that type in docs/public-api.md and in the package comment, including ReadOnly, the MemoryKeyProvider key-rotation methods, FileStorage, CheckedFileStorage and the codecs, because Go doc shows no methods for the root aliases; remove a duplicated paragraph from docs/architecture.md. No API or behaviour changes
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy

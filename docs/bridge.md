@@ -18,6 +18,11 @@ Without it, an app keeps a second copy of its state in the frontend, in a JavaSc
 Expose sources and register actions, then bind the bridge before `App.Run`:
 
 ```go
+// PageState is what pages see of State. encoding/json names an untagged field as it is declared, so the tag is what lets the page read state.count.
+type PageState struct {
+	Count int `json:"count"`
+}
+
 b := bridge.New(bridge.Options{})
 defer b.Close()
 
