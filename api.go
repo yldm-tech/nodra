@@ -168,8 +168,10 @@ func BindField[T, V any](store *Store[T], read func(T) V, write func(*T, V) erro
 	return core.BindField(store, read, write)
 }
 
+// Track starts recording changes to store, keeping at most limit undo entries; values below one disable history recording. It is TrackWith with only Limit set. Closing store does not close History, so close History when the store's owner is done with it.
 func Track[T any](store *Store[T], limit int) *History[T] { return core.Track(store, limit) }
 
+// TrackWith starts recording changes to store with options. Closing store does not close History: Undo and Redo then return ErrClosed and keep their stacks, CanUndo, CanRedo and Status keep reporting those stacks, and Status stays open, so close History when the store's owner is done with it.
 func TrackWith[T any](store *Store[T], options HistoryOptions[T]) *History[T] {
 	return core.TrackWith(store, options)
 }

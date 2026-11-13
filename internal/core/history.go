@@ -49,11 +49,12 @@ type History[T any] struct {
 	state        *Store[HistoryState]
 }
 
-// Track starts recording changes to store. limit is the maximum number of undo entries; values below one disable history recording.
+// Track starts recording changes to store. limit is the maximum number of undo entries; values below one disable history recording. It is TrackWith with only Limit set, and the same ownership rule applies: closing store does not close History.
 func Track[T any](store *Store[T], limit int) *History[T] {
 	return TrackWith(store, HistoryOptions[T]{Limit: limit})
 }
 
+// TrackWith starts recording changes to store with options. Closing store does not close History: Undo and Redo then return ErrClosed and keep their stacks, CanUndo, CanRedo and Status keep reporting those stacks, and Status stays open, so close History when the store's owner is done with it.
 func TrackWith[T any](store *Store[T], options HistoryOptions[T]) *History[T] {
 	if options.MaxBytes < 0 || (options.MaxBytes > 0 && options.Size == nil) {
 		panic(ErrInvalidHistory)
@@ -141,8 +142,24 @@ func (h *History[T]) BeginGroup() (func(), error) {
 	}, nil
 }
 
-func (h *History[T]) CanUndo() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.undo) > 0 }
-func (h *History[T]) CanRedo() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.redo) > 0 }
+// CanUndo reports whether Undo has a step to restore now. Like HistoryState.CanUndo, it is false while a group is open or History is closed. It does not observe an open Batch, where Undo returns ErrHistoryBatch, or a closed source Store, where Undo returns ErrClosed.
+func (h *History[T]) CanUndo() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.canTravelLocked(h.undo)
+}
+
+// CanRedo reports whether Redo has a step to restore now, with the same rules as CanUndo and HistoryState.CanRedo.
+func (h *History[T]) CanRedo() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.canTravelLocked(h.redo)
+}
+
+// canTravelLocked is the availability rule shared by CanUndo, CanRedo and the published HistoryState.
+func (h *History[T]) canTravelLocked(stack []historyEntry[T]) bool {
+	return !h.closed && h.groups == 0 && len(stack) > 0
+}
 
 // Undo restores the previous state.
 func (h *History[T]) Undo() error { return h.travel(true) }
@@ -294,7 +311,7 @@ func (h *History[T]) publishStatus() {
 		return
 	}
 	h.mu.Lock()
-	state := HistoryState{Revision: h.revision, UndoEntries: len(h.undo), RedoEntries: len(h.redo), Bytes: int64(h.bytes), MaxBytes: h.options.MaxBytes, Dropped: h.dropped, Grouped: h.groups > 0, Closed: h.closed, CanUndo: !h.closed && h.groups == 0 && len(h.undo) > 0, CanRedo: !h.closed && h.groups == 0 && len(h.redo) > 0}
+	state := HistoryState{Revision: h.revision, UndoEntries: len(h.undo), RedoEntries: len(h.redo), Bytes: int64(h.bytes), MaxBytes: h.options.MaxBytes, Dropped: h.dropped, Grouped: h.groups > 0, Closed: h.closed, CanUndo: h.canTravelLocked(h.undo), CanRedo: h.canTravelLocked(h.redo)}
 	h.mu.Unlock()
 	_ = h.state.UpdateErr(func(current *HistoryState) error {
 		if current.Revision >= state.Revision {
