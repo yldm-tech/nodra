@@ -138,3 +138,21 @@ test("dispatch and getState call the service by name", async () => {
 test("outside a MyGo window the client says so", () => {
   assert.throws(() => dispatch("a"), /MyGo runtime is missing/);
 });
+
+test("each subscription is its own, even with the same listener", () => {
+  const runtime = fakeRuntime();
+  const state = remoteState("s", { runtime });
+  let calls = 0;
+  const render = () => calls++;
+  const a = state.subscribe(render);
+  const b = state.subscribe(render);
+  runtime.watches[0].send({ name: "s", version: 1, value: 1 });
+  assert.equal(calls, 2, "both subscriptions hear the frame");
+  a();
+  a();
+  assert.equal(runtime.watches[0].channel.closed, false, "the watch closed although a subscription is live");
+  runtime.watches[0].send({ name: "s", version: 2, value: 2 });
+  assert.equal(calls, 3);
+  b();
+  assert.equal(runtime.watches[0].channel.closed, true);
+});

@@ -19,6 +19,7 @@ function serviceOf(options) {
  */
 export function remoteState(name, options = {}) {
   const service = serviceOf(options);
+  // One entry per subscription, so a listener subscribed twice is two subscriptions, each ended by its own unsubscribe.
   const listeners = new Set();
   let value;
   let version = 0;
@@ -29,7 +30,7 @@ export function remoteState(name, options = {}) {
   let generation = 0;
 
   const notify = () => {
-    for (const listener of [...listeners]) listener();
+    for (const entry of [...listeners]) entry.listener();
   };
 
   function start() {
@@ -70,10 +71,11 @@ export function remoteState(name, options = {}) {
     getError: () => error,
     hasValue: () => received,
     subscribe(listener) {
-      listeners.add(listener);
+      const entry = { listener };
+      listeners.add(entry);
       if (!channel) start();
       return () => {
-        if (listeners.delete(listener) && listeners.size === 0) stop();
+        if (listeners.delete(entry) && listeners.size === 0) stop();
       };
     },
     ready() {
