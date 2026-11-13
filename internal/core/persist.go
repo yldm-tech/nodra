@@ -73,8 +73,16 @@ func (p *Persistence[T]) Load(ctx context.Context) error {
 	return p.load(ctx, false)
 }
 
-// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation, a closed Store and an invalid configuration stop before attempting the backup. An invalid configuration is ErrInvalidPersistence returned by Persistence itself, by a storage read (such as an empty FileStorage path or a symlinked CheckedFileStorage primary), or unwrapped by a codec (such as a nil AESGCMCodec key ring or a VersionedJSONCodec Version below 1). A decode or validate error that wraps ErrInvalidPersistence with more context, such as a damaged VersionedJSONCodec envelope, describes damaged data and falls back to the backup.
+// LoadWithRecovery explicitly tries the primary first and then the backup when the primary cannot be read, decoded or validated. It never rewrites either file and never hides a failure: if both candidates fail, RecoveryError retains both causes. Cancellation, a closed Store and an invalid configuration stop before attempting the backup; a Store that is already closed returns ErrClosed without reading either candidate. An invalid configuration is ErrInvalidPersistence returned by Persistence itself, by a storage read (such as an empty FileStorage path or a symlinked CheckedFileStorage primary), or unwrapped by a codec (such as a nil AESGCMCodec key ring or a VersionedJSONCodec Version below 1). A decode or validate error that wraps ErrInvalidPersistence with more context, such as a damaged VersionedJSONCodec envelope, describes damaged data and falls back to the backup.
 func (p *Persistence[T]) LoadWithRecovery(ctx context.Context) error {
+	// load checks for a closed Store only when it sets the decoded value, so a damaged primary would otherwise be reported as a decode failure and the backup read for nothing.
+	if p != nil && p.store != nil {
+		select {
+		case <-p.store.done:
+			return ErrClosed
+		default:
+		}
+	}
 	primary := p.Load(ctx)
 	if primary == nil {
 		return nil

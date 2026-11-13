@@ -15,6 +15,7 @@
 ### Bug Fixes
 
 * **persistence:** an `AutoSaveAsync` writer with a `Debounce` no longer writes updates made during a save as soon as that save returns: they wait for the debounce and `MaxWait`, counted from when the save returns, so storage slower than the update rate no longer turns the writer into back-to-back writes. A zero `Debounce`, or a Flush or Close waiting on the save, still writes them at once; docs/architecture.md and the `AsyncOptions` doc say so
+* **persistence:** `LoadWithRecovery` on a closed Store returns `ErrClosed` before reading anything, as documented; with a damaged primary it used to read and decode the backup as well and return a `RecoveryError`
 * **async:** retry backoff saturates instead of overflowing, so `MaxBackoff` still bounds every delay when `MaxAttempts` is large; canceling, superseding or closing during a backoff delay no longer starts one more work attempt with a canceled context
 * **scope:** a late `Scope.Observe` contains a panicking stop function and returns `ErrClosed` joined with a `PanicError`, like a late `Defer`
 

@@ -121,6 +121,33 @@ func TestPersistenceLoadWithRecoveryDoesNotFallbackOnCancellation(t *testing.T) 
 	}
 }
 
+// A closed Store can accept neither candidate, so recovery stops with ErrClosed before reading anything, even when the primary is damaged and the backup is valid.
+func TestPersistenceLoadWithRecoveryStopsOnClosedStore(t *testing.T) {
+	store := New(0)
+	requireNoError(t, store.Close())
+	storage := &closedRecoveryStorage{}
+	err := NewPersistence(store, storage, JSONCodec[int]{}).LoadWithRecovery(context.Background())
+	var recoveryErr *RecoveryError
+	if !errors.Is(err, ErrClosed) || errors.As(err, &recoveryErr) {
+		t.Fatalf("recovery on a closed store = %v", err)
+	}
+	if storage.primaryLoads != 0 || storage.backupLoads != 0 {
+		t.Fatalf("recovery on a closed store read the primary %d and the backup %d times", storage.primaryLoads, storage.backupLoads)
+	}
+}
+
+type closedRecoveryStorage struct{ primaryLoads, backupLoads int }
+
+func (s *closedRecoveryStorage) Load(context.Context) ([]byte, error) {
+	s.primaryLoads++
+	return []byte(`{"broken":`), nil
+}
+func (s *closedRecoveryStorage) LoadBackup(context.Context) ([]byte, error) {
+	s.backupLoads++
+	return []byte("7"), nil
+}
+func (*closedRecoveryStorage) Save(context.Context, []byte) error { return nil }
+
 type recoveryProbeStorage struct{ backupLoads int }
 
 func (*recoveryProbeStorage) Load(context.Context) ([]byte, error) {
