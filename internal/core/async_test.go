@@ -497,3 +497,133 @@ func TestAsyncMaxWaitShorterThanDebounceAndValidation(t *testing.T) {
 		requireNoError(t, writer.Close(context.Background()))
 	})
 }
+
+// An update made while a save is running is written after Debounce, like any other update, instead of in a follow-up write that starts as soon as the save returns.
+func TestAsyncUpdateDuringSaveWaitsForDebounce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gate := make(chan struct{})
+		storage := &asyncStorage{gate: gate, entered: make(chan int, 10)}
+		store := New(0)
+		writer, err := NewPersistence(store, storage, JSONCodec[int]{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Hour})
+		requireNoError(t, err)
+		time.Sleep(time.Hour)
+		if got := <-storage.entered; got != 0 {
+			t.Fatalf("initial write = %d", got)
+		}
+		requireNoError(t, store.Set(1))
+		close(gate)
+		synctest.Wait()
+		time.Sleep(time.Hour - time.Millisecond)
+		synctest.Wait()
+		select {
+		case got := <-storage.entered:
+			t.Errorf("value %d made during a save was written before Debounce elapsed", got)
+		default:
+		}
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		select {
+		case got := <-storage.entered:
+			if got != 1 {
+				t.Errorf("debounced write = %d, want 1", got)
+			}
+		default:
+			t.Error("value made during a save was not written after Debounce")
+		}
+		requireNoError(t, writer.Close(context.Background()))
+		if values, _ := storage.result(); !reflect.DeepEqual(values, []int{0, 1}) {
+			t.Fatalf("writes = %v", values)
+		}
+	})
+}
+
+// A zero Debounce, or a Flush waiting on the running save, still writes an update made during that save as soon as the save returns.
+func TestAsyncUpdateDuringSaveWritesAtOnceWithoutDebounceOrWithFlush(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		debounce time.Duration
+		flush    bool
+	}{
+		{name: "zero debounce", debounce: 0},
+		{name: "flush", debounce: time.Hour, flush: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				gate := make(chan struct{})
+				storage := &asyncStorage{gate: gate, entered: make(chan int, 10)}
+				store := New(0)
+				writer, err := NewPersistence(store, storage, JSONCodec[int]{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: tc.debounce})
+				requireNoError(t, err)
+				time.Sleep(tc.debounce)
+				if got := <-storage.entered; got != 0 {
+					t.Fatalf("initial write = %d", got)
+				}
+				requireNoError(t, store.Set(1))
+				flushed := make(chan error, 1)
+				if tc.flush {
+					go func() { flushed <- writer.Flush(context.Background()) }()
+					synctest.Wait()
+				}
+				close(gate)
+				synctest.Wait()
+				select {
+				case got := <-storage.entered:
+					if got != 1 {
+						t.Errorf("follow-up write = %d, want 1", got)
+					}
+				default:
+					t.Error("update made during a save was not written when the save returned")
+				}
+				if tc.flush {
+					requireNoError(t, <-flushed)
+				}
+				requireNoError(t, writer.Close(context.Background()))
+			})
+		})
+	}
+}
+
+type slowStorage struct {
+	asyncStorage
+	delay time.Duration
+}
+
+func (s *slowStorage) Save(ctx context.Context, data []byte) error {
+	time.Sleep(s.delay)
+	return s.asyncStorage.Save(ctx, data)
+}
+
+// Storage slower than the update rate must not turn a debounced writer into back-to-back writes: Debounce and MaxWait still bound how often updates that arrive during a save are written.
+func TestAsyncSlowStorageKeepsDebounceAndMaxWait(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		maxWait       time.Duration
+		before, after []int
+	}{
+		{name: "unbounded", before: []int{0}, after: []int{0, 1000}},
+		// The initial save runs from 1.0 s to 1.1 s; each later wait starts when the previous save returns and ends at MaxWait, at 3.1 s, 5.2 s, 7.3 s and 9.4 s, capturing the updates made 5 ms earlier. The next deadline, 11.5 s, falls after the updates stop.
+		{name: "bounded", maxWait: 2 * time.Second, before: []int{0, 210, 420, 630, 840}, after: []int{0, 210, 420, 630, 840, 1000}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store, storage := New(0), &slowStorage{delay: 100 * time.Millisecond}
+				writer, err := NewPersistence(store, storage, JSONCodec[int]{}).AutoSaveAsync(context.Background(), AsyncOptions{Debounce: time.Second, MaxWait: tc.maxWait})
+				requireNoError(t, err)
+				// Updates every 10 ms from 1.005 s to 10.995 s, starting while the initial save runs and never at the same instant as a timer.
+				time.Sleep(1005 * time.Millisecond)
+				for i := 1; i <= 1000; i++ {
+					requireNoError(t, store.Set(i))
+					time.Sleep(10 * time.Millisecond)
+				}
+				synctest.Wait()
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.before) {
+					t.Errorf("writes during continuous updates = %v, want %v", values, tc.before)
+				}
+				requireNoError(t, writer.Close(context.Background()))
+				if values, _ := storage.result(); !reflect.DeepEqual(values, tc.after) {
+					t.Fatalf("writes after close = %v, want %v", values, tc.after)
+				}
+			})
+		})
+	}
+}

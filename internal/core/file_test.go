@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -88,6 +90,43 @@ func TestJournaledFileStorageRoundTripAndCleanup(t *testing.T) {
 		if _, err := os.Stat(path + suffix); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("journal artifact %s remains: %v", suffix, err)
 		}
+	}
+	backup, err := storage.LoadBackup(context.Background())
+	if err != nil || string(backup) != `{"count":4}` {
+		t.Fatalf("journaled backup=%q err=%v", backup, err)
+	}
+	// Only the primary and its backup may remain: a journal, commit marker or temporary file left under any name means cleanup missed a record that saveJournaled wrote.
+	requireDirectoryEntries(t, filepath.Dir(path), "state.json", "state.json.bak")
+}
+
+// The backup is written after the journal is cleaned up, so a failed backup reports that the primary was saved and leaves no journal record for a later Load to replay.
+func TestJournaledFileStorageBackupFailureLeavesNoJournalRecord(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	// A non-empty directory where the backup belongs makes its atomic rename fail on every platform.
+	requireNoError(t, os.MkdirAll(filepath.Join(path+".bak", "occupied"), 0755))
+	storage := FileStorage{Path: path, Journal: true, Backup: true}
+	err := storage.Save(context.Background(), []byte(`{"count":5}`))
+	if err == nil || !strings.Contains(err.Error(), "primary saved, backup failed") {
+		t.Fatalf("journaled save with a failing backup = %v", err)
+	}
+	requireDirectoryEntries(t, dir, "state.json", "state.json.bak")
+	data, err := storage.Load(context.Background())
+	if err != nil || string(data) != `{"count":5}` {
+		t.Fatalf("load after failed backup=%q err=%v", data, err)
+	}
+}
+
+func requireDirectoryEntries(t *testing.T, dir string, want ...string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	requireNoError(t, err)
+	got := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		got = append(got, entry.Name())
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("directory entries = %v, want %v", got, want)
 	}
 }
 
