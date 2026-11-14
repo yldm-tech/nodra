@@ -1,0 +1,51 @@
+name: mygo-latest
+# go.mod pins the minimum MyGo version, but minimum version selection lets an application that also requires a newer MyGo build Nodra against that one. This workflow upgrades MyGo to its latest release and runs the build, vet and race tests on it, so an upstream change that breaks Nodra shows up before a consumer reports it. It does not run on pull requests: a new MyGo release must not block unrelated changes, and a failed scheduled run notifies the repository owner.
+on:
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  GOWORK: "off"
+jobs:
+  go:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-26-intel, macos-26, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The setup-go cache is keyed on the committed go.sum, so a run that saved it here would fill the key the test workflow restores with modules and builds for a MyGo version it does not use.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Upgrade MyGo to the latest release
+        shell: bash
+        run: |
+          pinned=$(go list -m -f '{{.Version}}' github.com/egoist/mygo)
+          latest=$(go list -m -f '{{.Version}}' github.com/egoist/mygo@latest)
+          echo "MyGo: go.mod requires $pinned, latest release is $latest"
+          # setup-go exports GOTOOLCHAIN=local. If the latest MyGo needs a newer Go than go.mod's toolchain line, let go get raise the go line and fetch that toolchain, as an application upgrading MyGo would, instead of failing before Nodra is built. This and every later step use it.
+          export GOTOOLCHAIN=auto
+          echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+          go get github.com/egoist/mygo@latest
+          go mod tidy
+          git diff -- go.mod
+      - name: Print resolved versions
+        shell: bash
+        env:
+          RUNNER_LABEL: ${{ matrix.os }}
+        run: |
+          resolved=$(go list -m -f '{{.Version}}' github.com/egoist/mygo)
+          toolchain=$(go env GOVERSION)
+          echo "Resolved MyGo $resolved with $toolchain"
+          echo "Nodra tested against MyGo $resolved with $toolchain on $RUNNER_LABEL" >> "$GITHUB_STEP_SUMMARY"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
