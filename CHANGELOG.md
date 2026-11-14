@@ -71,6 +71,32 @@
 * record v1.0.0 publication checks, checksums, API evidence, and package documentation; activate the published v1 compatibility policy
 * state in docs/architecture.md and the Go docs that `SubscribeMetrics` callbacks are not covered by `Task.Wait` or `AsyncAction.Close` and can run after unsubscribing, and that `Metrics` read after `Close` is the final aggregate
 
+## [1.5.0](https://github.com/yldm-tech/nodra/compare/v1.4.0...v1.5.0) (2026-11-14)
+
+
+### Features
+
+* **history:** add History.Clear to drop undo steps when the document is replaced ([#124](https://github.com/yldm-tech/nodra/issues/124)) ([ff0cd53](https://github.com/yldm-tech/nodra/commit/ff0cd531c8a6f0a328d78ff0ba9f5b536ea8663f))
+
+
+### Bug Fixes
+
+* **core:** fix Derived.Close deadlock and AtomicGroup candidate aliasing ([#120](https://github.com/yldm-tech/nodra/issues/120)) ([9f86a83](https://github.com/yldm-tech/nodra/commit/9f86a83fa0ae77c06d86d152cc9b6ca7030421c3))
+* **core:** keep Combine from publishing pairs no committed state contained ([#119](https://github.com/yldm-tech/nodra/issues/119)) ([4230ba0](https://github.com/yldm-tech/nodra/commit/4230ba0f157ad6ee8659fc78a7f4a02907378ccb))
+* deliver the final value when a store or bridge source closes ([#118](https://github.com/yldm-tech/nodra/issues/118)) ([9f365f9](https://github.com/yldm-tech/nodra/commit/9f365f9a5251671b39a8905b4315daec94836477))
+* **persistence:** debounce follow-up async writes and stop LoadWithRecovery on a closed Store ([#121](https://github.com/yldm-tech/nodra/issues/121)) ([4f1b39c](https://github.com/yldm-tech/nodra/commit/4f1b39cb3b3596079e1bde3020d454bd18cfb348))
+* **persistence:** make FileStorage.Save reliable on Windows when the file is held or read-only ([#122](https://github.com/yldm-tech/nodra/issues/122)) ([242ba45](https://github.com/yldm-tech/nodra/commit/242ba455ac48998b6d54359542143440febd9760))
+
+
+### Performance Improvements
+
+* stop cloning the whole state for change-signal subscribers and default selector equality ([#123](https://github.com/yldm-tech/nodra/issues/123)) ([7056690](https://github.com/yldm-tech/nodra/commit/7056690ce7a568d7e7c6dd27ec1174c351a8cfac))
+
+
+### Dependencies
+
+* require MyGo v0.9.0 ([#129](https://github.com/yldm-tech/nodra/issues/129)) ([e64d336](https://github.com/yldm-tech/nodra/commit/e64d336f889b368ae580b1fe02da3da714576b24))
+
 ## [1.4.0](https://github.com/yldm-tech/nodra/compare/v1.3.0...v1.4.0) (2026-11-13)
 
 
