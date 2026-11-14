@@ -91,6 +91,10 @@ func (p *MemoryKeyProvider) Get(id string) ([]byte, error) {
 type AESGCMCodec[T any] struct {
 	Inner Codec[T]
 	Keys  KeyProvider
+	// AssociatedData is authenticated with the ciphertext under whichever key seals or opens it, current or historical, but it is neither encrypted nor stored in the envelope: Decode accepts only ciphertext that Encode sealed with the same value. Set it to the identity of the store, such as its file path or the application and store name, so that two stores sharing a key cannot load each other's files when one is copied over the other.
+	//
+	// The empty string seals without associated data, the format AESGCMCodec has always written, so existing files keep loading. Reading and writing must use the same value; changing it, including setting it for data saved without one, needs a migration that loads with a codec carrying the old value and saves with one carrying the new value.
+	AssociatedData string
 }
 
 type encryptedEnvelope struct {
@@ -127,7 +131,7 @@ func (c AESGCMCodec[T]) Encode(value T) ([]byte, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
-	envelope := encryptedEnvelope{Algorithm: "AES-GCM", KeyID: keyID, Nonce: base64.RawStdEncoding.EncodeToString(nonce), Ciphertext: base64.RawStdEncoding.EncodeToString(gcm.Seal(nil, nonce, plain, nil))}
+	envelope := encryptedEnvelope{Algorithm: "AES-GCM", KeyID: keyID, Nonce: base64.RawStdEncoding.EncodeToString(nonce), Ciphertext: base64.RawStdEncoding.EncodeToString(gcm.Seal(nil, nonce, plain, []byte(c.AssociatedData)))}
 	return json.Marshal(envelope)
 }
 
@@ -163,7 +167,7 @@ func (c AESGCMCodec[T]) Decode(data []byte) (T, error) {
 	if err != nil {
 		return zero, errors.New("nodra: invalid encrypted ciphertext")
 	}
-	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	plain, err := gcm.Open(nil, nonce, ciphertext, []byte(c.AssociatedData))
 	if err != nil {
 		return zero, err
 	}
