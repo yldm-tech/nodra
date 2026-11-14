@@ -6,6 +6,14 @@ export type Lang = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr';
 
 export const LANGS: Lang[] = ['zh', 'en', 'ja', 'ko', 'es', 'fr'];
 
+// Diagram text kept next to the animation code: one string per language, in LANGS order, picked with the language's index.
+export type Tr = [zh: string, en: string, ja: string, ko: string, es: string, fr: string];
+export type LangIndex = 0 | 1 | 2 | 3 | 4 | 5;
+
+export function langIndex(lang: Lang): LangIndex {
+	return LANGS.indexOf(lang) as LangIndex;
+}
+
 // Chinese is the default and lives at the bare URL; other languages use `?lang=…`, so every language has a shareable, server-rendered address.
 export interface LangSearch {
 	lang?: Exclude<Lang, 'zh'>;

@@ -2,7 +2,7 @@ import { Link, getRouteApi } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mascot } from '../components/Mascot';
 import { SiteHeader } from '../components/SiteHeader';
-import { INSTALL_CMD, type Lang, REPO_URL, useLang } from '../lib/lang';
+import { INSTALL_CMD, type Lang, langIndex, REPO_URL, useLang } from '../lib/lang';
 import { T } from './copy';
 import { Features } from './Features';
 import { type FlowModel, flowView, startHeroFlow } from './flow';
@@ -39,7 +39,7 @@ function measureZoom(): Zoom {
 
 export function HomePage() {
 	const lang = useLang();
-	const li = lang === 'zh' ? 0 : 1;
+	const li = langIndex(lang);
 	const t = T[lang];
 	const { stats } = homeRoute.useLoaderData();
 
