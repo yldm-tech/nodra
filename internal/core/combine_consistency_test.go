@@ -571,18 +571,45 @@ func (o *movingObservable) SubscribeSnapshot(fn func(Snapshot[int])) func() {
 	return o.store.SubscribeSnapshot(fn)
 }
 
-// TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput has a writer goroutine write x between the reads of x and of the second input in every read construction makes itself, so none of them finds a pair; construction used to read until the writer paused. The writer reads nothing while it writes, so a read made while it delivers its own notification finds a pair, also when x reaches Combine through a derived value whose equals filters every write and so notifies nothing.
+// inputShape builds a Combine input over x and returns it with the values to close afterwards.
+type inputShape struct {
+	name  string
+	build func(x *Store[int]) (Observable[int], []interface{ Close() error })
+}
+
+// filteringShapes are inputs over x that notify their subscribers of no write of x, because a derived value with an equals that finds every value unchanged sits directly below Combine, one level lower, or below another Combine. Every such write still changes the versions Combine checks a pair against.
+var filteringShapes = []inputShape{
+	{"Derive(x) filters", func(x *Store[int]) (Observable[int], []interface{ Close() error }) {
+		zero := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
+		return zero, []interface{ Close() error }{zero}
+	}},
+	{"Derive(Derive(x) filters)", func(x *Store[int]) (Observable[int], []interface{ Close() error }) {
+		zero := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
+		outer := Derive[int, int](zero, func(v int) int { return v }, nil)
+		return outer, []interface{ Close() error }{outer, zero}
+	}},
+	{"Combine(Derive(x) filters, z)", func(x *Store[int]) (Observable[int], []interface{ Close() error }) {
+		zero := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
+		z := New(0)
+		combined := Combine[int, int, int](zero, z, func(a, b int) int { return a + b }, nil)
+		return combined, []interface{ Close() error }{combined, zero, z}
+	}},
+}
+
+func closeAll(closers []interface{ Close() error }) {
+	for _, c := range closers {
+		_ = c.Close()
+	}
+}
+
+// TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput has a writer goroutine write x between the reads of x and of the second input in every read construction makes itself, so none of them finds a pair; construction used to read until the writer paused. The writer reads nothing while it writes, so a read made while it delivers its own notification finds a pair, also when x reaches Combine through a derived value whose equals filters every write, at any depth, and so notifies nothing.
 func TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput(t *testing.T) {
-	pairOf := func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }
-	for _, filtered := range []bool{false, true} {
-		t.Run(fmt.Sprintf("filtered=%v", filtered), func(t *testing.T) {
+	direct := inputShape{"x", func(x *Store[int]) (Observable[int], []interface{ Close() error }) { return x, nil }}
+	for _, shape := range append([]inputShape{direct}, filteringShapes...) {
+		t.Run(shape.name, func(t *testing.T) {
 			x, y := New(0), New(7)
-			var first Observable[int] = x
-			if filtered {
-				unchanged := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
-				defer func() { _ = unchanged.Close() }()
-				first = unchanged
-			}
+			first, closers := shape.build(x)
+			defer closeAll(closers)
 			requests := make(chan chan struct{})
 			defer close(requests)
 			var writing atomic.Bool
@@ -607,6 +634,11 @@ func TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput(t *testing.T) 
 				<-done
 			}
 			second.enabled.Store(true)
+			// Construction projects its first pair once it has found one and before it subscribes, so the writer stops there: the publish with which a subscription catches up holds the Combine's publish lock while it reads, and a write it waited for would deliver its notification to that lock. A Store read never waits for a delivery, so outside this test the read just goes on.
+			pairOf := func(a, b int) Pair[int, int] {
+				second.enabled.Store(false)
+				return Pair[int, int]{a, b}
+			}
 			built := make(chan *Derived[Pair[int, int], Pair[int, int]], 1)
 			go func() { built <- Combine[int, int, Pair[int, int]](first, second, pairOf, nil) }()
 			var combined *Derived[Pair[int, int], Pair[int, int]]
@@ -653,57 +685,61 @@ func (w *commitWatch) clone(value int) int {
 	return value
 }
 
-// TestCombinePublishReturnsWhileWritesKeepMovingAnInput writes x, each time from a new goroutine, between a publish's reads of Derive(x) and of y in every read it makes, so none finds a pair; the publish used to read until the writes paused, and the goroutine that wrote y waited with it. Derive(x) filters every write of x as equal, so its subscribers never hear of them, and Combine must still publish the final pair once the writes stop.
+// TestCombinePublishReturnsWhileWritesKeepMovingAnInput writes x, each time from a new goroutine, between a publish's reads of the first input and of y in every read it makes, so none finds a pair; the publish used to read until the writes paused, and the goroutine that wrote y waited with it. The first input notifies its subscribers of no write of x, because a derived value below it filters every one as equal, and Combine must still publish the final pair once the writes stop.
 func TestCombinePublishReturnsWhileWritesKeepMovingAnInput(t *testing.T) {
-	var watch commitWatch
-	x, y := NewWithClone(0, watch.clone), New(0)
-	unchanged := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
-	defer func() { _ = unchanged.Close() }()
-	var writes sync.WaitGroup
-	var next atomic.Int64
-	second := &movingObservable{store: y}
-	second.move = func() {
-		value := int(next.Add(1))
-		committed := watch.expect(value)
-		writes.Add(1)
-		go func() {
-			defer writes.Done()
-			if err := x.Set(value); err != nil {
-				t.Error(err)
+	for _, shape := range filteringShapes {
+		t.Run(shape.name, func(t *testing.T) {
+			var watch commitWatch
+			x, y := NewWithClone(0, watch.clone), New(0)
+			first, closers := shape.build(x)
+			defer closeAll(closers)
+			var writes sync.WaitGroup
+			var next atomic.Int64
+			second := &movingObservable{store: y}
+			second.move = func() {
+				value := int(next.Add(1))
+				committed := watch.expect(value)
+				writes.Add(1)
+				go func() {
+					defer writes.Done()
+					if err := x.Set(value); err != nil {
+						t.Error(err)
+					}
+				}()
+				<-committed
+				// The writer still holds the store lock; this waits until it has committed.
+				x.Version()
 			}
-		}()
-		<-committed
-		// The writer still holds the store lock; this waits until it has committed.
-		x.Version()
-	}
-	combined := Combine[int, int, Pair[int, int]](unchanged, second, func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }, nil)
-	defer func() { _ = combined.Close() }()
-	// Derive(x) accepts this write without notifying, so the version the Combine holds for it is out of date and the next publish has to read both inputs.
-	if err := x.Set(-1); err != nil {
-		t.Fatal(err)
-	}
-	second.enabled.Store(true)
-	published := make(chan error, 1)
-	go func() { published <- y.Set(1) }()
-	select {
-	case err := <-published:
-		second.enabled.Store(false)
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(10 * time.Second):
-		second.enabled.Store(false)
-		err := <-published
-		writes.Wait()
-		t.Fatalf("y.Set did not return while writes kept moving x between Combine's reads (it returned %v once they stopped)", err)
-	}
-	writes.Wait()
-	if got, want := combined.Get(), (Pair[int, int]{0, 1}); got != want {
-		t.Fatalf("Combine = %+v after the writes stopped, want %+v", got, want)
+			combined := Combine[int, int, Pair[int, int]](first, second, func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }, nil)
+			defer func() { _ = combined.Close() }()
+			// The first input notifies nothing of this write, so the version the Combine holds for it is out of date and the next publish has to read both inputs.
+			if err := x.Set(-1); err != nil {
+				t.Fatal(err)
+			}
+			second.enabled.Store(true)
+			published := make(chan error, 1)
+			go func() { published <- y.Set(1) }()
+			select {
+			case err := <-published:
+				second.enabled.Store(false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(10 * time.Second):
+				second.enabled.Store(false)
+				err := <-published
+				writes.Wait()
+				t.Fatalf("y.Set did not return while writes kept moving x between Combine's reads (it returned %v once they stopped)", err)
+			}
+			writes.Wait()
+			if got, want := combined.Get(), (Pair[int, int]{0, 1}); got != want {
+				t.Fatalf("Combine = %+v after the writes stopped, want %+v", got, want)
+			}
+		})
 	}
 }
 
-// TestCombineStaysConsistentWhileAWriterNeverPauses runs a writer that, without pausing, moves amounts between x and y with Atomic2 and rewrites x unchanged, which derived values with an equals filter, while Combines over x, y, those derived values and other Combines are built and published. Construction and every publish must return while the writer still runs, every projector call and delivery must see a committed pair, and once the writer stops every Combine must hold the final state.
+// TestCombineStaysConsistentWhileAWriterNeverPauses runs a writer that, without pausing, moves amounts between x and y with Atomic2 and rewrites x unchanged, which derived values with an equals filter, while Combines over x, y, those derived values and other Combines are built and published. Some Combines also read x through inputs that notify nothing of its writes because a derived value below them filters every one. Construction and every publish must return while the writer still runs, every projector call and delivery must see a committed pair, and once the writer stops every Combine must hold the final state.
 func TestCombineStaysConsistentWhileAWriterNeverPauses(t *testing.T) {
 	const constructions = 200
 	var torn tornRecorder
@@ -732,6 +768,13 @@ func TestCombineStaysConsistentWhileAWriterNeverPauses(t *testing.T) {
 		c.Subscribe(func(p Pair[int, int]) { torn.check(name+" subscriber", p.First+p.Second) })
 	}
 	both.Subscribe(func(p Pair[int, int]) { torn.check("Combine of Combines subscriber", p.First+p.Second) })
+	// deep holds a Combine of each filtering shape over x with y, which must end at {0, y}.
+	deep := make(map[string]*Derived[Pair[int, int], Pair[int, int]])
+	for _, shape := range filteringShapes {
+		input, shapeClosers := shape.build(x)
+		deep[shape.name] = Combine[int, int, Pair[int, int]](input, y, pairOf, nil)
+		closers = append(append(closers, deep[shape.name]), shapeClosers...)
+	}
 
 	// running is closed once the writer has written a while, so the Combines below are built and published during the writes.
 	running, stop, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
@@ -820,6 +863,11 @@ func TestCombineStaysConsistentWhileAWriterNeverPauses(t *testing.T) {
 	for name, got := range map[string]Pair[int, int]{"Combine(x, y)": direct.Get(), "Combine(Derive(x), Derive(y))": derived.Get(), "Combine of Combines": both.Get()} {
 		if got != final {
 			t.Errorf("%s = %+v after the writer stopped, want the final state %+v", name, got, final)
+		}
+	}
+	for name, c := range deep {
+		if got, want := c.Get(), (Pair[int, int]{0, final.Second}); got != want {
+			t.Errorf("Combine(%s, y) = %+v after the writer stopped, want %+v", name, got, want)
 		}
 	}
 	for i, c := range kept {

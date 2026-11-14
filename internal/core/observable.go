@@ -183,7 +183,7 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 				stop()
 			}
 		}()
-		// publish hands the newest pair downstream when both inputs still hold it. Otherwise one input has not caught up with a write the other may already reflect, so publish reads a pair both inputs hold now instead; the input still catching up later notifies a value that is already published, or none when equals filters it. When writers keep changing an input during every read, publish hands nothing downstream: each such write notifies this Combine after it commits, through acceptA or acceptB or, when a derived input's equals filters it, through that input's filtered listener, and so calls publish again after this call has finished; that call publishes the newest pair. publishMu serializes the check or read with the update of published, so a higher version always carries a pair checked or read later, and a publisher that finds the published pair still current compares it with the newest one: two publishers cannot finish in the opposite order and leave an older pair at the higher version. It is released before fn; the derived value drops a delivery that arrives after a newer one.
+		// publish hands the newest pair downstream when both inputs still hold it. Otherwise one input has not caught up with a write the other may already reflect, so publish reads a pair both inputs hold now instead; the input still catching up later notifies a value that is already published, or none when equals filters it. When writers keep changing an input during every read, publish hands nothing downstream: each such write notifies this Combine after it commits, through acceptA or acceptB or, when a derived value at or below an input filters it as equal, through that input's filtered listener, and so calls publish again after this call has finished; that call publishes the newest pair. publishMu serializes the check or read with the update of published, so a higher version always carries a pair checked or read later, and a publisher that finds the published pair still current compares it with the newest one: two publishers cannot finish in the opposite order and leave an older pair at the higher version. It is released before fn; the derived value drops a delivery that arrives after a newer one.
 		publish := func(transactionID uint64) {
 			publishMu.Lock()
 			mu.Lock()
@@ -262,17 +262,22 @@ func Combine[A, B, V any](first Observable[A], second Observable[B], project fun
 		}
 		stops = append(stops, first.SubscribeSnapshot(acceptA))
 		stops = append(stops, second.SubscribeSnapshot(acceptB))
-		// A derived input notifies no subscriber of a version its equals filters, but that write may be what kept a publish from reading a pair, so it publishes again.
+		// A derived input notifies no subscriber of a write that it or a derived value below it filtered, but that write may be what kept a publish from reading a pair, so it publishes again.
 		stops = append(stops, subscribeFiltered(first, schedule), subscribeFiltered(second, schedule))
 		acceptA(first.Snapshot())
 		acceptB(second.Snapshot())
 		ready = true
 		return stop
 	}
-	return derive(nil, snapshot, subscribe, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals, height, links)
+	// A write filtered below an input moves no version of this Combine when publish finds nothing new, but it still changes a version a Combine above checks, so it is passed on too.
+	inputsFiltered := func(fn func(uint64)) func() {
+		stopFirst, stopSecond := subscribeFiltered(first, fn), subscribeFiltered(second, fn)
+		return func() { stopFirst(); stopSecond() }
+	}
+	return derive(nil, snapshot, subscribe, inputsFiltered, func(pair Pair[A, B]) V { return project(pair.First, pair.Second) }, equals, height, links)
 }
 
-// awaitRead waits until read finds a pair, after construction's own reads did not because writers kept changing an input between the two reads. Each such write notifies after it commits, so awaitRead reads again on the goroutine of every notification of either input, including a version that a derived input's equals filtered; that goroutine is not writing while it notifies, so a single writer that never pauses cannot keep construction waiting. The constructing goroutine also reads again on its own after a delay that doubles up to awaitReadMaxDelay, in case the writers stop before they notify, for example in a subscriber that waits for this goroutine.
+// awaitRead waits until read finds a pair, after construction's own reads did not because writers kept changing an input between the two reads. Each such write notifies after it commits, so awaitRead reads again on the goroutine of every notification of either input, including a version that a derived value at or below either input filtered; that goroutine is not writing while it notifies, so a single writer that never pauses cannot keep construction waiting. The constructing goroutine also reads again on its own after a delay that doubles up to awaitReadMaxDelay, in case the writers stop before they notify, for example in a subscriber that waits for this goroutine.
 func awaitRead[A, B, R any](first Observable[A], second Observable[B], read func() (R, bool)) R {
 	var mu sync.Mutex
 	var found R
@@ -321,12 +326,12 @@ func awaitRead[A, B, R any](first Observable[A], second Observable[B], read func
 	}
 }
 
-// filteredNode is implemented by derived values, whose equals can filter a source version so that their subscribers hear nothing of it.
+// filteredNode is implemented by derived values: their equals, or that of a derived value below them, can filter a write so that their subscribers hear nothing of it.
 type filteredNode interface {
 	subscribeFiltered(fn func(transactionID uint64)) func()
 }
 
-// subscribeFiltered registers fn for the versions a derived source accepts without notifying because its equals filtered them. Other sources notify every version and register nothing.
+// subscribeFiltered registers fn for the writes that reach a derived source without a notification because it or a derived value below it filtered them. Other sources notify every version and register nothing.
 func subscribeFiltered(source any, fn func(transactionID uint64)) func() {
 	if node, ok := source.(filteredNode); ok {
 		return node.subscribeFiltered(fn)
@@ -334,7 +339,7 @@ func subscribeFiltered(source any, fn func(transactionID uint64)) func() {
 	return func() {}
 }
 
-// subscribeFiltered registers fn for the source versions the derived value accepts without notifying because equals found the value unchanged. fn receives the version's transaction and runs on the notifying goroutine after the derived lock is released.
+// subscribeFiltered registers fn for the source versions the derived value accepts without notifying because equals found the value unchanged, and for the writes a derived value below it filtered, which it passes on. fn receives the version's transaction and runs on the notifying goroutine after the derived lock is released.
 func (d *Derived[T, V]) subscribeFiltered(fn func(transactionID uint64)) func() {
 	d.mu.Lock()
 	if d.closed {

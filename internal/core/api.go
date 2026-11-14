@@ -130,7 +130,7 @@ type Derived[T any, V any] struct {
 	transactionID     uint64
 	listeners         map[uint64]func(V)
 	snapshotListeners map[uint64]func(Snapshot[V])
-	// filteredListeners hear of the source versions that equals filtered, which listeners and snapshotListeners do not.
+	// filteredListeners hear of writes below the derived value that reached it without a notification, which listeners and snapshotListeners do not: source versions its equals filtered, and versions a source below it filtered.
 	filteredListeners map[uint64]func(transactionID uint64)
 	nextID            uint64
 	stop              func()
@@ -156,7 +156,8 @@ func Derive[T any, V any](source Observable[T], selector func(T) V, equals func(
 	if !validObservable(source) {
 		return closedDerived[T, V]()
 	}
-	return derive(nil, source.Snapshot, source.SubscribeSnapshot, selector, equals, observableHeight(source)+1, linksOf(source))
+	sourceFiltered := func(fn func(uint64)) func() { return subscribeFiltered(source, fn) }
+	return derive(nil, source.Snapshot, source.SubscribeSnapshot, sourceFiltered, selector, equals, observableHeight(source)+1, linksOf(source))
 }
 
 // DeriveProjection memoizes an owned projection without whole-source clones. It follows SubscribeProjection's ownership contract; returned reference values and listener arguments are read-only. A Combine that reads the derived value before it has caught up with source may also call project, without changing the derived value.
@@ -169,11 +170,11 @@ func DeriveProjection[T any, V any](source Reader[T], project func(T) V, equals 
 		snapshot := store.borrowedSnapshot()
 		return snapshot, true, func() bool { return store.fresh(snapshot.Version) }
 	}}
-	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, project, equals, 1, links)
+	return derive(store, store.borrowedSnapshot, store.subscribeBorrowed, nil, project, equals, 1, links)
 }
 
-// derive builds a derived value at height, which is one more than the height of its highest source.
-func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), selector func(T) V, equals func(V, V) bool, height int, links sourceLinks[T]) *Derived[T, V] {
+// derive builds a derived value at height, which is one more than the height of its highest source. subscribeFiltered, when not nil, registers for the writes below the source that reached it without a notification; the derived value passes them on to its own filtered listeners, so a Combine above hears of them at any depth.
+func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscribe func(func(Snapshot[T])) func(), subscribeFiltered func(func(uint64)) func(), selector func(T) V, equals func(V, V) bool, height int, links sourceLinks[T]) *Derived[T, V] {
 	d := &Derived[T, V]{source: store, selector: selector, equals: equals, listeners: make(map[uint64]func(V)), done: make(chan struct{}), height: height}
 	if selector == nil {
 		d.closed = true
@@ -218,10 +219,7 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 			d.version = input.Version
 			d.transactionID = input.TransactionID
 			if equal {
-				filtered := make([]func(uint64), 0, len(d.filteredListeners))
-				for _, fn := range d.filteredListeners {
-					filtered = append(filtered, fn)
-				}
+				filtered := d.filteredLocked()
 				d.mu.Unlock()
 				for _, fn := range filtered {
 					fn(input.TransactionID)
@@ -272,6 +270,10 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 		})
 	}
 	d.stop = subscribe(changed)
+	if subscribeFiltered != nil {
+		stopChanged, stopFiltered := d.stop, subscribeFiltered(d.passFiltered)
+		d.stop = func() { stopChanged(); stopFiltered() }
+	}
 	initialized := false
 	defer func() {
 		if !initialized {
@@ -281,6 +283,29 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 	changed(snapshot())
 	initialized = true
 	return d
+}
+
+// filteredLocked returns the filtered listeners; the caller holds d.mu.
+func (d *Derived[T, V]) filteredLocked() []func(uint64) {
+	filtered := make([]func(uint64), 0, len(d.filteredListeners))
+	for _, fn := range d.filteredListeners {
+		filtered = append(filtered, fn)
+	}
+	return filtered
+}
+
+// passFiltered tells the filtered listeners of a write below the source that reached it without a notification. The source's version moved, so this value is no longer fresh, and a Combine that could not read a pair because of the write must hear of it to publish again.
+func (d *Derived[T, V]) passFiltered(transactionID uint64) {
+	d.mu.Lock()
+	if d.closed || len(d.filteredListeners) == 0 {
+		d.mu.Unlock()
+		return
+	}
+	filtered := d.filteredLocked()
+	d.mu.Unlock()
+	for _, fn := range filtered {
+		fn(transactionID)
+	}
 }
 
 // Done is closed when Close detaches the derived value, and is already closed for one built from an invalid source or a nil selector. It is nil for a nil Derived.
