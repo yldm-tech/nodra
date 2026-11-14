@@ -71,7 +71,7 @@ mygo.App.WhenReady(func() {
 })
 ```
 
-MyGo 集成目标版本是 `v0.7.4`。临时控件状态应放在视图所有者中，共享 Store 只提交实际编辑的字段。最小的原生窗口示例见 [`examples/mygo`](examples/mygo/main.go)。
+MyGo 集成目标版本是 `v0.9.0`。临时控件状态应放在视图所有者中，共享 Store 只提交实际编辑的字段。最小的原生窗口示例见 [`examples/mygo`](examples/mygo/main.go)。
 
 ```go
 history := nodra.Track(store, 100)
@@ -83,7 +83,7 @@ func (app *App) view(c *ui.Context) {
 }
 ```
 
-可选的 `nativeui` 子包让窗口的撤销和重做作用于 `History`：快捷键，以及 MyGo 0.7.4 起 macOS 上 Edit 菜单里的对应项，只在历史可以撤销或重做时启用。聚焦的文本框保留自己的撤销。它独立于核心包，没有原生 UI 的应用不会因此链接 MyGo 的 `ui` 包。
+可选的 `nativeui` 子包让窗口的撤销和重做作用于 `History`：快捷键，以及 MyGo 0.9.0 起 macOS 上 Edit 菜单里的对应项，只在历史可以撤销或重做时启用。聚焦的文本框保留自己的撤销。它独立于核心包，没有原生 UI 的应用不会因此链接 MyGo 的 `ui` 包。
 
 只共享 Store、从不打开窗口的服务和命令行工具可以用 `-tags nodra_nomygo` 构建。它去掉接收 `*mygo.Window` 的辅助函数（`InvalidateTarget` 保留），因此不会链接 MyGo，`CGO_ENABLED=0` 的 Linux 构建就是静态可执行文件。这个标签作用于整个构建：`nativeui` 以及任何调用这些辅助函数的库在该标签下无法编译，`bridge` 会重新链接 MyGo。详见 [`docs/support.md`](docs/support.md)。
 
@@ -182,4 +182,4 @@ golangci-lint run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-Nodra 是一个 Go 模块：`github.com/yldm-tech/nodra`。项目要求 Go `1.27.3` 或更新版本，原生集成使用 MyGo `v0.7.4`。
+Nodra 是一个 Go 模块：`github.com/yldm-tech/nodra`。项目要求 Go `1.27.3` 或更新版本，原生集成使用 MyGo `v0.9.0`。

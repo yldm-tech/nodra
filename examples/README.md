@@ -13,7 +13,7 @@ Start with [workbench](workbench/README.md) for a complete desktop application, 
 
 ## Requirements
 
-Use Go 1.27.3 or later. All examples belong to the root Go module and use its pinned dependencies, including MyGo v0.7.4; they do not require separate module initialization. The `mygo`, `web` and `workbench` examples open native windows and need a graphical desktop session. See the [supported platforms](../docs/support.md) for the tested runtime matrix.
+Use Go 1.27.3 or later. All examples belong to the root Go module and use its pinned dependencies, including MyGo v0.9.0; they do not require separate module initialization. The `mygo`, `web` and `workbench` examples open native windows and need a graphical desktop session. See the [supported platforms](../docs/support.md) for the tested runtime matrix.
 
 Clone the repository and enter its root before running any command:
 

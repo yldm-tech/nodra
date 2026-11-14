@@ -71,7 +71,7 @@ mygo.App.WhenReady(func() {
 })
 ```
 
-MyGo の対象バージョンは `v0.7.4` です。一時的なウィジェット状態はビュー所有者に置き、共有 Store には編集したフィールドだけを書き戻します。最小のネイティブウィンドウの例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
+MyGo の対象バージョンは `v0.9.0` です。一時的なウィジェット状態はビュー所有者に置き、共有 Store には編集したフィールドだけを書き戻します。最小のネイティブウィンドウの例は [`examples/mygo`](examples/mygo/main.go) を参照してください。
 
 ```go
 history := nodra.Track(store, 100)
@@ -83,7 +83,7 @@ func (app *App) view(c *ui.Context) {
 }
 ```
 
-オプションの `nativeui` サブパッケージは、ウィンドウの取り消しとやり直しを `History` に結び付けます。ショートカットと、MyGo 0.7.4 以降の macOS では Edit メニューの項目も対象で、履歴が操作できるときだけ有効になります。フォーカス中のテキスト入力は独自の取り消しを保ちます。コアから分かれているため、ネイティブ UI を使わないアプリは MyGo の `ui` パッケージをリンクしません。
+オプションの `nativeui` サブパッケージは、ウィンドウの取り消しとやり直しを `History` に結び付けます。ショートカットと、MyGo 0.9.0 以降の macOS では Edit メニューの項目も対象で、履歴が操作できるときだけ有効になります。フォーカス中のテキスト入力は独自の取り消しを保ちます。コアから分かれているため、ネイティブ UI を使わないアプリは MyGo の `ui` パッケージをリンクしません。
 
 Store を共有するだけでウィンドウを開かないサービスや CLI は `-tags nodra_nomygo` でビルドできます。`*mygo.Window` を受け取るヘルパーが除かれ（`InvalidateTarget` は残ります）、MyGo がリンクされないため、`CGO_ENABLED=0` の Linux ビルドは静的実行ファイルになります。このタグはビルド全体に効きます。`nativeui` や、これらのヘルパーを呼ぶライブラリはこのタグではコンパイルできず、`bridge` を使うと MyGo が再びリンクされます。詳しくは [`docs/support.md`](docs/support.md) を参照してください。
 
@@ -182,4 +182,4 @@ golangci-lint run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-Nodra は 1 つの Go モジュール `github.com/yldm-tech/nodra` です。Go `1.27.3` 以上が必要で、ネイティブ連携には MyGo `v0.7.4` を使用します。
+Nodra は 1 つの Go モジュール `github.com/yldm-tech/nodra` です。Go `1.27.3` 以上が必要で、ネイティブ連携には MyGo `v0.9.0` を使用します。
