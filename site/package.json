@@ -10,6 +10,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
+		"check:docs-i18n": "node scripts/check-doc-translations.mjs",
 		"deploy": "pnpm run build && wrangler deploy",
 		"cf-typegen": "wrangler types"
 	},

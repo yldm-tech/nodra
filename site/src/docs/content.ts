@@ -1,5 +1,9 @@
 import type { Lang } from '../lib/lang';
 import { LOCALES } from '../lib/i18n';
+import es from './translations/es.json';
+import fr from './translations/fr.json';
+import ja from './translations/ja.json';
+import ko from './translations/ko.json';
 
 // API reference for the root package and its optional subpackages devtools, bridge and nativeui. Signatures, contract notes and examples were checked against the v1.6.0 sources (api.go, internal/core, devtools, bridge, nativeui, docs/architecture.md, docs/bridge.md); every example compiles against the module.
 
@@ -610,3 +614,25 @@ fmt.Println(url)`,
 		],
 	},
 ];
+
+// The reference is written in zh and en here. The other languages translate the English text in translations/<lang>.json, keyed by the English string itself, so a sentence whose English changes falls back to the new English until it is translated again rather than showing a translation of the old one. scripts/check-doc-translations.mjs, run in CI, fails when a key is missing or no longer used.
+const TRANSLATIONS: Record<Exclude<Lang, 'zh' | 'en'>, Record<string, string>> = { ja, ko, es, fr };
+
+export function docText(lang: Lang, [zh, en]: Pair): string {
+	if (lang === 'zh') return zh;
+	if (lang === 'en') return en;
+	return TRANSLATIONS[lang][en] ?? en;
+}
+
+// Every English string the page shows from SECTIONS, in page order and without duplicates: the keys the translation files must have.
+export function englishTexts(): string[] {
+	const texts = new Set<string>();
+	for (const s of SECTIONS) {
+		texts.add(s.title[1]);
+		texts.add(s.lead[1]);
+		for (const m of s.methods ?? []) texts.add(m[3]);
+		for (const c of s.contract ?? []) texts.add(c[1]);
+		if (s.concurrency) texts.add(s.concurrency[1]);
+	}
+	return [...texts];
+}
