@@ -5,9 +5,9 @@ This matrix is the release contract for Nodra 1.0. CI is expected to exercise th
 | Component | Supported baseline | Verification |
 | --- | --- | --- |
 | Go toolchain | Go 1.27.3 or newer within the same language/module compatibility line | `go.mod`, test/vet/lint/module jobs |
-| MyGo integration | MyGo 0.7.4 | `go.mod`, native examples and invalidation tests |
+| MyGo integration | MyGo 0.9.0 | `go.mod`, native examples and invalidation tests |
 | Bridge client | Pages in MyGo's web views, which run ES modules; no Node or browser outside MyGo | `node --test bridge/client/nodra.test.mjs` on Node 24; the bridge's Go side in the race and vet matrix |
-| Edit menu integration (`nativeui`) | MyGo 0.7.4: the keys on every platform, and on macOS the Edit menu following history | `nativeui` and `examples/mygo` UI-tester tests in the race and vet matrix |
+| Edit menu integration (`nativeui`) | MyGo 0.9.0: the keys on every platform, and on macOS the Edit menu following history | `nativeui` and `examples/mygo` UI-tester tests in the race and vet matrix |
 | Operating systems | Linux, macOS, Windows | race and vet matrix |
 | Architectures | `amd64` on Linux/macOS/Windows; native macOS arm64; pure-Go Linux and Windows arm64 builds | explicit native architecture checks and race/vet matrix on `ubuntu-latest`, `macos-26-intel`, `macos-26`, and `windows-latest`; Linux/Windows arm64 cross-builds |
 | CGO | `CGO_ENABLED=0` builds compile on every listed target; CGO is not required by Nodra. On Linux the default build still links MyGo, whose purego fallback makes the executable dynamically linked against glibc; build with `-tags nodra_nomygo` for a static executable | Linux CI pure-Go builds; `examples/basic` built with `-tags nodra_nomygo` must have no `PT_INTERP` header |

@@ -71,7 +71,7 @@ mygo.App.WhenReady(func() {
 })
 ```
 
-The integration targets MyGo `v0.7.4`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
+The integration targets MyGo `v0.9.0`. Keep temporary widget state in the view owner and commit only the edited field to the shared Store. See [`examples/mygo`](examples/mygo/main.go) for a minimal native window.
 
 ```go
 history := nodra.Track(store, 100)
@@ -83,7 +83,7 @@ func (app *App) view(c *ui.Context) {
 }
 ```
 
-The optional `nativeui` subpackage makes the window's Undo and Redo act on a `History`: the keys, and with MyGo 0.7.4 on macOS the Edit menu items, which are enabled only while history can act. A focused text input keeps its own undo. It is separate from the core so apps without native UI do not link MyGo's `ui` package.
+The optional `nativeui` subpackage makes the window's Undo and Redo act on a `History`: the keys, and with MyGo 0.9.0 on macOS the Edit menu items, which are enabled only while history can act. A focused text input keeps its own undo. It is separate from the core so apps without native UI do not link MyGo's `ui` package.
 
 Services and CLIs that share Stores but never open a window can build with `-tags nodra_nomygo`. It leaves out the `*mygo.Window` helpers (`InvalidateTarget` stays) so MyGo is not linked, and a `CGO_ENABLED=0` Linux build is then a static executable. The tag applies to the whole build: `nativeui`, or any library that calls those helpers, does not compile with it, and `bridge` links MyGo again. See [`docs/support.md`](docs/support.md).
 
@@ -182,4 +182,4 @@ golangci-lint run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-Nodra is one Go module: `github.com/yldm-tech/nodra`. The project requires Go `1.27.3` or newer and uses MyGo `v0.7.4` for native integration.
+Nodra is one Go module: `github.com/yldm-tech/nodra`. The project requires Go `1.27.3` or newer and uses MyGo `v0.9.0` for native integration.

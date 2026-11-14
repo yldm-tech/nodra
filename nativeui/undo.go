@@ -11,7 +11,7 @@ import (
 
 // UndoShortcuts makes the window's Undo and Redo act on history, in the view being built. While history can undo, Cmd+Z (Ctrl+Z on Linux and Windows) undoes; while it can redo, Shift+Cmd+Z redoes, and Ctrl+Y too on Windows, where the Edit menu shows it. Call it at the top level of the window's view, outside the builders of child elements, so the shortcuts serve the whole window.
 //
-// A focused text input keeps its own undo: the keys and the Edit menu act on its text, and on history only while no text input has the focus. With MyGo 0.7.4 on macOS, the Edit menu enables Undo and Redo only while they would act, so they follow history as the view is rebuilt; InvalidateHistory rebuilds it when history's state changes. On Linux and Windows the keys reach the shortcuts first; the menu's items act on text inputs.
+// A focused text input keeps its own undo: the keys and the Edit menu act on its text, and on history only while no text input has the focus. With MyGo 0.9.0 on macOS, the Edit menu enables Undo and Redo only while they would act, so they follow history as the view is rebuilt; InvalidateHistory rebuilds it when history's state changes. On Linux and Windows the keys reach the shortcuts first; the menu's items act on text inputs.
 //
 // The shortcuts run on the main thread, as Undo and Redo then publish: a store subscriber that does slow work should move it to another goroutine. An Undo or Redo that history refuses, because a group began after the frame was built, does nothing.
 func UndoShortcuts[T any](c *ui.Context, history *nodra.History[T]) {

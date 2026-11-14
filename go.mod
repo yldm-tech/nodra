@@ -5,7 +5,7 @@ go 1.27.3
 toolchain go1.27.4
 
 require (
-	github.com/egoist/mygo v0.7.4
+	github.com/egoist/mygo v0.9.0
 	github.com/gofrs/flock v0.13.1
 )
 

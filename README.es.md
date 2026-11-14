@@ -71,7 +71,7 @@ mygo.App.WhenReady(func() {
 })
 ```
 
-La integración usa MyGo `v0.7.4`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para una ventana nativa mínima.
+La integración usa MyGo `v0.9.0`. Mantén el estado temporal de los widgets en el propietario de la vista y escribe en el Store compartido solo el campo editado. Consulta [`examples/mygo`](examples/mygo/main.go) para una ventana nativa mínima.
 
 ```go
 history := nodra.Track(store, 100)
@@ -83,7 +83,7 @@ func (app *App) view(c *ui.Context) {
 }
 ```
 
-El subpaquete opcional `nativeui` hace que Deshacer y Rehacer de la ventana actúen sobre un `History`: los atajos y, con MyGo 0.7.4 en macOS, los elementos del menú Edit, que solo se habilitan cuando el historial puede actuar. Un campo de texto con el foco conserva su propio deshacer. Está separado del núcleo para que las apps sin UI nativa no enlacen el paquete `ui` de MyGo.
+El subpaquete opcional `nativeui` hace que Deshacer y Rehacer de la ventana actúen sobre un `History`: los atajos y, con MyGo 0.9.0 en macOS, los elementos del menú Edit, que solo se habilitan cuando el historial puede actuar. Un campo de texto con el foco conserva su propio deshacer. Está separado del núcleo para que las apps sin UI nativa no enlacen el paquete `ui` de MyGo.
 
 Los servicios y CLI que comparten Stores pero nunca abren una ventana pueden compilarse con `-tags nodra_nomygo`. La etiqueta omite las funciones auxiliares que reciben un `*mygo.Window` (`InvalidateTarget` se mantiene), así que MyGo no se enlaza y una compilación de Linux con `CGO_ENABLED=0` produce un ejecutable estático. La etiqueta se aplica a toda la compilación: `nativeui`, o cualquier biblioteca que llame a esas funciones, no compila con ella, y `bridge` vuelve a enlazar MyGo. Consulta [`docs/support.md`](docs/support.md).
 
@@ -182,4 +182,4 @@ golangci-lint run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-Nodra es un único módulo Go: `github.com/yldm-tech/nodra`. El proyecto requiere Go `1.27.3` o posterior y usa MyGo `v0.7.4` para la integración nativa.
+Nodra es un único módulo Go: `github.com/yldm-tech/nodra`. El proyecto requiere Go `1.27.3` o posterior y usa MyGo `v0.9.0` para la integración nativa.

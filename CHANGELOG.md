@@ -59,6 +59,7 @@
 
 ### Dependencies
 
+* support MyGo 0.9.0; go.mod now requires it instead of 0.7.4, so a module that requires Nodra builds with MyGo 0.9.0 or newer. Nodra's API, the invalidation helpers and `nativeui` keep the same signatures and behaviour; apps should check MyGo's own breaking changes since 0.7.4: keys in `HandleInput` (0.8.0) and the removal of `sqlite.LibraryPath` (0.9.0)
 * support MyGo 0.7.4; go.mod now requires it instead of 0.6.3 (by way of 0.7.2 and 0.7.3), and the invalidation helpers keep the same signatures and behaviour
 
 ### Documentation
