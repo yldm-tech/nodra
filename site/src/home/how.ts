@@ -71,7 +71,7 @@ const ERR: Record<string, Tr> = {
 	'validate: count < 0': ['校验失败：count < 0', 'validate: count < 0', '検証失敗：count < 0', '검증 실패: count < 0', 'validación: count < 0', 'validation : count < 0'],
 	'#1 rejected · stale generation': ['#1 被拒绝：已被更新的任务取代', '#1 rejected · stale generation', '#1 を拒否 · 古い世代', '#1 거부 · 오래된 세대', '#1 rechazado · generación obsoleta', '#1 rejeté · génération obsolète'],
 };
-const UNDO_STACK = (v: string): Tr => [`${v} → undo stack`, `${v} → undo stack`, `${v} → Undo スタック`, `${v} → 실행 취소 스택`, `${v} → pila de deshacer`, `${v} → pile d’annulation`];
+const UNDO_STACK = (v: string): Tr => [`${v} → 撤销栈`, `${v} → undo stack`, `${v} → Undo スタック`, `${v} → 실행 취소 스택`, `${v} → pila de deshacer`, `${v} → pile d’annulation`];
 
 const IDLE4: Frame['subs'] = [{ s: 'idle' }, { s: 'idle' }, { s: 'idle' }, { s: 'idle' }];
 const NONE4: Frame['subs'] = [{ s: 'none' }, { s: 'none' }, { s: 'none' }, { s: 'none' }];
