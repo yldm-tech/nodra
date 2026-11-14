@@ -552,3 +552,279 @@ func TestCombineOverAnObservableWithChangingVersionsReturns(t *testing.T) {
 		t.Fatalf("Combine of the Combine = %d after both writes, want 50", got)
 	}
 }
+
+// movingObservable is an application Observable over a Store whose Snapshot, while enabled, first runs move, which writes another Store and returns once that write has committed. A Combine that reads the other Store before this one then always finds it moved, as a writer that never pauses can make any read find.
+type movingObservable struct {
+	store   *Store[int]
+	move    func()
+	enabled atomic.Bool
+}
+
+func (o *movingObservable) Snapshot() Snapshot[int] {
+	if o.enabled.Load() {
+		o.move()
+	}
+	return o.store.Snapshot()
+}
+
+func (o *movingObservable) SubscribeSnapshot(fn func(Snapshot[int])) func() {
+	return o.store.SubscribeSnapshot(fn)
+}
+
+// TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput has a writer goroutine write x between the reads of x and of the second input in every read construction makes itself, so none of them finds a pair; construction used to read until the writer paused. The writer reads nothing while it writes, so a read made while it delivers its own notification finds a pair, also when x reaches Combine through a derived value whose equals filters every write and so notifies nothing.
+func TestCombineConstructionReturnsWhileAWriterKeepsMovingAnInput(t *testing.T) {
+	pairOf := func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("filtered=%v", filtered), func(t *testing.T) {
+			x, y := New(0), New(7)
+			var first Observable[int] = x
+			if filtered {
+				unchanged := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
+				defer func() { _ = unchanged.Close() }()
+				first = unchanged
+			}
+			requests := make(chan chan struct{})
+			defer close(requests)
+			var writing atomic.Bool
+			go func() {
+				for done := range requests {
+					writing.Store(true)
+					if err := x.Update(func(v *int) { *v++ }); err != nil {
+						t.Error(err)
+					}
+					writing.Store(false)
+					close(done)
+				}
+			}()
+			second := &movingObservable{store: y}
+			second.move = func() {
+				if writing.Load() {
+					// A read made from the writer's own notification: the writer is not writing now.
+					return
+				}
+				done := make(chan struct{})
+				requests <- done
+				<-done
+			}
+			second.enabled.Store(true)
+			built := make(chan *Derived[Pair[int, int], Pair[int, int]], 1)
+			go func() { built <- Combine[int, int, Pair[int, int]](first, second, pairOf, nil) }()
+			var combined *Derived[Pair[int, int], Pair[int, int]]
+			select {
+			case combined = <-built:
+				second.enabled.Store(false)
+			case <-time.After(10 * time.Second):
+				second.enabled.Store(false)
+				_ = (<-built).Close()
+				t.Fatal("Combine construction did not return while the writer kept moving x between its reads")
+			}
+			defer func() { _ = combined.Close() }()
+			if got, want := combined.Get(), (Pair[int, int]{first.Snapshot().Value, 7}); got != want {
+				t.Fatalf("Combine = %+v after construction, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// commitWatch is the clone function of a NewWithClone store that reports the first copy made of each value it was told to expect. Set makes that copy under the store lock when it commits the value, so once it is reported a read of the store waits for the commit.
+type commitWatch struct {
+	mu       sync.Mutex
+	expected map[int]chan struct{}
+}
+
+func (w *commitWatch) expect(value int) <-chan struct{} {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.expected == nil {
+		w.expected = make(map[int]chan struct{})
+	}
+	copied := make(chan struct{})
+	w.expected[value] = copied
+	return copied
+}
+
+func (w *commitWatch) clone(value int) int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if copied, ok := w.expected[value]; ok {
+		delete(w.expected, value)
+		close(copied)
+	}
+	return value
+}
+
+// TestCombinePublishReturnsWhileWritesKeepMovingAnInput writes x, each time from a new goroutine, between a publish's reads of Derive(x) and of y in every read it makes, so none finds a pair; the publish used to read until the writes paused, and the goroutine that wrote y waited with it. Derive(x) filters every write of x as equal, so its subscribers never hear of them, and Combine must still publish the final pair once the writes stop.
+func TestCombinePublishReturnsWhileWritesKeepMovingAnInput(t *testing.T) {
+	var watch commitWatch
+	x, y := NewWithClone(0, watch.clone), New(0)
+	unchanged := Derive[int, int](x, func(int) int { return 0 }, func(a, b int) bool { return a == b })
+	defer func() { _ = unchanged.Close() }()
+	var writes sync.WaitGroup
+	var next atomic.Int64
+	second := &movingObservable{store: y}
+	second.move = func() {
+		value := int(next.Add(1))
+		committed := watch.expect(value)
+		writes.Add(1)
+		go func() {
+			defer writes.Done()
+			if err := x.Set(value); err != nil {
+				t.Error(err)
+			}
+		}()
+		<-committed
+		// The writer still holds the store lock; this waits until it has committed.
+		x.Version()
+	}
+	combined := Combine[int, int, Pair[int, int]](unchanged, second, func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }, nil)
+	defer func() { _ = combined.Close() }()
+	// Derive(x) accepts this write without notifying, so the version the Combine holds for it is out of date and the next publish has to read both inputs.
+	if err := x.Set(-1); err != nil {
+		t.Fatal(err)
+	}
+	second.enabled.Store(true)
+	published := make(chan error, 1)
+	go func() { published <- y.Set(1) }()
+	select {
+	case err := <-published:
+		second.enabled.Store(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		second.enabled.Store(false)
+		err := <-published
+		writes.Wait()
+		t.Fatalf("y.Set did not return while writes kept moving x between Combine's reads (it returned %v once they stopped)", err)
+	}
+	writes.Wait()
+	if got, want := combined.Get(), (Pair[int, int]{0, 1}); got != want {
+		t.Fatalf("Combine = %+v after the writes stopped, want %+v", got, want)
+	}
+}
+
+// TestCombineStaysConsistentWhileAWriterNeverPauses runs a writer that, without pausing, moves amounts between x and y with Atomic2 and rewrites x unchanged, which derived values with an equals filter, while Combines over x, y, those derived values and other Combines are built and published. Construction and every publish must return while the writer still runs, every projector call and delivery must see a committed pair, and once the writer stops every Combine must hold the final state.
+func TestCombineStaysConsistentWhileAWriterNeverPauses(t *testing.T) {
+	const constructions = 200
+	var torn tornRecorder
+	x, y := New(tornTotal), New(0)
+	identity := func(v int) int { return v }
+	equal := func(a, b int) bool { return a == b }
+	pairOf := func(a, b int) Pair[int, int] { return Pair[int, int]{a, b} }
+	dx := Derive[int, int](x, identity, equal)
+	dy := Derive[int, int](y, identity, equal)
+	direct := Combine(x, y, pairOf, nil)
+	derived := Combine[int, int, Pair[int, int]](dx, dy, pairOf, nil)
+	both := Combine[Pair[int, int], Pair[int, int], Pair[int, int]](direct, derived, func(p, q Pair[int, int]) Pair[int, int] {
+		if p != q {
+			torn.check(fmt.Sprintf("Combine(%v, %v) projector", p, q), 0)
+		}
+		torn.check("Combine of Combines projector", p.First+p.Second)
+		return p
+	}, nil)
+	closers := []interface{ Close() error }{both, derived, direct, dy, dx}
+	defer func() {
+		for _, c := range closers {
+			_ = c.Close()
+		}
+	}()
+	for name, c := range map[string]*Derived[Pair[int, int], Pair[int, int]]{"Combine(x, y)": direct, "Combine(Derive(x), Derive(y))": derived} {
+		c.Subscribe(func(p Pair[int, int]) { torn.check(name+" subscriber", p.First+p.Second) })
+	}
+	both.Subscribe(func(p Pair[int, int]) { torn.check("Combine of Combines subscriber", p.First+p.Second) })
+
+	// running is closed once the writer has written a while, so the Combines below are built and published during the writes.
+	running, stop, stopped := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		for i := 0; ; i++ {
+			if i == 100 {
+				close(running)
+			}
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			var err error
+			if i%3 == 2 {
+				err = x.Update(func(*int) {})
+			} else {
+				amount := i%7 - 3
+				err = Atomic2(x, y, func(a, b *int) error { *a -= amount; *b += amount; return nil })
+			}
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	var kept []*Derived[Pair[int, int], Pair[int, int]]
+	built := make(chan struct{})
+	go func() {
+		defer close(built)
+		select {
+		case <-running:
+		case <-stopped:
+			return
+		}
+		for i := range constructions {
+			var sum interface {
+				Get() int
+				Close() error
+			}
+			switch i % 3 {
+			case 0:
+				sum = Combine(x, y, torn.sum("constructed x+y"), nil)
+			case 1:
+				sum = Combine[int, int, int](dx, y, torn.sum("constructed Derive(x)+y"), nil)
+			default:
+				sum = Combine[Pair[int, int], int, int](direct, dy, func(p Pair[int, int], b int) int {
+					torn.check("constructed Combine(x, y)+Derive(y) projector", p.First+p.Second)
+					return p.First + b
+				}, nil)
+			}
+			torn.check("constructed Combine.Get", sum.Get())
+			_ = sum.Close()
+			// Every twentieth Combine constructed during the writes stays open, to check that it also reaches the final state.
+			if i%20 == 0 {
+				kept = append(kept, Combine[int, int, Pair[int, int]](dx, y, func(a, b int) Pair[int, int] {
+					torn.check("kept Combine projector", a+b)
+					return Pair[int, int]{a, b}
+				}, nil))
+			}
+		}
+	}()
+	select {
+	case <-built:
+	case <-time.After(30 * time.Second):
+		close(stop)
+		<-built
+		t.Fatal("Combine construction did not return while the writer ran")
+	}
+	close(stop)
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the writer did not stop: a publish it triggered did not return")
+	}
+	for _, c := range kept {
+		closers = append(closers, c)
+	}
+	torn.verify(t)
+
+	final := Pair[int, int]{x.Get(), y.Get()}
+	if final.First+final.Second != tornTotal {
+		t.Fatalf("stores lost the invariant: %+v", final)
+	}
+	for name, got := range map[string]Pair[int, int]{"Combine(x, y)": direct.Get(), "Combine(Derive(x), Derive(y))": derived.Get(), "Combine of Combines": both.Get()} {
+		if got != final {
+			t.Errorf("%s = %+v after the writer stopped, want the final state %+v", name, got, final)
+		}
+	}
+	for i, c := range kept {
+		if got := c.Get(); got != final {
+			t.Errorf("Combine constructed during the writes (#%d) = %+v after they stopped, want %+v", i, got, final)
+		}
+	}
+}

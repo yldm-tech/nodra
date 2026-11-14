@@ -130,6 +130,8 @@ type Derived[T any, V any] struct {
 	transactionID     uint64
 	listeners         map[uint64]func(V)
 	snapshotListeners map[uint64]func(Snapshot[V])
+	// filteredListeners hear of the source versions that equals filtered, which listeners and snapshotListeners do not.
+	filteredListeners map[uint64]func(transactionID uint64)
 	nextID            uint64
 	stop              func()
 	closed            bool
@@ -216,7 +218,14 @@ func derive[T any, V any](store *Store[T], snapshot func() Snapshot[T], subscrib
 			d.version = input.Version
 			d.transactionID = input.TransactionID
 			if equal {
+				filtered := make([]func(uint64), 0, len(d.filteredListeners))
+				for _, fn := range d.filteredListeners {
+					filtered = append(filtered, fn)
+				}
 				d.mu.Unlock()
+				for _, fn := range filtered {
+					fn(input.TransactionID)
+				}
 				return
 			}
 			d.value = next
@@ -311,6 +320,7 @@ func (d *Derived[T, V]) Close() error {
 	stop := d.stop
 	d.listeners = nil
 	d.snapshotListeners = nil
+	d.filteredListeners = nil
 	if d.done != nil {
 		close(d.done)
 	}
