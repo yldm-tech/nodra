@@ -22,6 +22,7 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md). Before a pull request run `go test ./
 release-please publishes the module from Conventional Commits on `main`, and pull requests are squash-merged, so the pull request title becomes the commit that release-please reads.
 
 - `site/` is excluded from releases, but only for commits whose files are all inside `site/`. A squashed commit that also touches anything outside `site/` counts as a library change, and a `feat` or `fix` title then publishes a new Nodra version. v1.1.0 was released this way by a website pull request that also edited CI and release configuration.
+- A dependency change that consumers inherit, such as raising the required MyGo version, uses the `deps` type: it publishes a patch release and is listed under Dependencies in the release notes (`changelog-sections` in `release-please-config.json`).
 - Keep website changes and everything else in separate pull requests. Changes to workflows, release configuration, READMEs or these instruction files use a non-releasing type such as `ci`, `chore` or `docs`.
 
 ## Website
