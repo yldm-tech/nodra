@@ -1,5 +1,5 @@
 name: mygo-latest
-# go.mod pins the minimum MyGo version, but minimum version selection lets an application that also requires a newer MyGo build Nodra against that one. This workflow upgrades MyGo to its latest release and runs the build, vet and race tests on it, so an upstream change that breaks Nodra shows up before a consumer reports it. It does not run on pull requests: a new MyGo release must not block unrelated changes, and a failed scheduled run notifies the repository owner.
+# go.mod pins the minimum MyGo version, but minimum version selection lets an application that also requires a newer MyGo build Nodra against that one. This workflow upgrades MyGo to its latest release and runs the build, vet and race tests on it, so an upstream change that breaks Nodra shows up before a consumer reports it. It does not run on pull requests: a new MyGo release must not block unrelated changes, and a failed scheduled run notifies the person who last changed this workflow's cron schedule (or last re-enabled it), not the yldm-tech organization, so whoever edits the schedule takes over the alerts.
 on:
   schedule:
     - cron: '41 4 * * 1'
