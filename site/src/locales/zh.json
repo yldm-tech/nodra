@@ -100,7 +100,7 @@
     "concurrency": "并发说明",
     "copy": "复制",
     "copied": "已复制",
-    "footnote": "签名、示例代码与行为说明均已对照 v1.5.0 源码核对，示例可直接编译；以 pkg.go.dev 上的文档为准。",
+    "footnote": "签名、示例代码与行为说明均已对照 v1.6.0 源码核对，示例可直接编译；以 pkg.go.dev 上的文档为准。",
     "metaTitle": "Nodra 文档 · API 参考",
     "metaDesc": "Nodra 根包的完整方法索引与语义约定：Store、选择器、原子事务、撤销重做、持久化、异步动作与 MyGo 集成。",
     "ogImageAlt": "Nodra 文档：根包 API 参考，含方法签名、行为约定与并发说明。",

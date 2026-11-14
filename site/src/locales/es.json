@@ -100,7 +100,7 @@
     "concurrency": "CONCURRENCIA",
     "copy": "Copiar",
     "copied": "Copiado",
-    "footnote": "Las firmas, los ejemplos y las notas del contrato se han verificado con el código fuente de v1.5.0, y todos los ejemplos compilan; la referencia oficial es pkg.go.dev.",
+    "footnote": "Las firmas, los ejemplos y las notas del contrato se han verificado con el código fuente de v1.6.0, y todos los ejemplos compilan; la referencia oficial es pkg.go.dev.",
     "metaTitle": "Docs de Nodra · referencia API",
     "metaDesc": "Índice de métodos y contrato semántico del paquete raíz de Nodra.",
     "ogImageAlt": "Docs de Nodra: la referencia API del paquete raíz con firmas, contratos y notas de concurrencia.",

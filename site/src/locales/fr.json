@@ -100,7 +100,7 @@
     "concurrency": "CONCURRENCE",
     "copy": "Copier",
     "copied": "Copié",
-    "footnote": "Les signatures, les exemples et les notes de contrat sont vérifiés par rapport aux sources de la v1.5.0, et chaque exemple compile ; pkg.go.dev fait foi.",
+    "footnote": "Les signatures, les exemples et les notes de contrat sont vérifiés par rapport aux sources de la v1.6.0, et chaque exemple compile ; pkg.go.dev fait foi.",
     "metaTitle": "Docs Nodra · référence API",
     "metaDesc": "Index des méthodes et contrat sémantique du paquet racine Nodra.",
     "ogImageAlt": "Docs Nodra : la référence API du paquet racine avec signatures, contrats et notes sur la concurrence.",
