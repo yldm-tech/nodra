@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/yldm-tech/nodra/compare/v1.5.0...v1.6.0) (2026-11-14)
+
+
+### Features
+
+* **persistence:** add opt-in associated data to AESGCMCodec ([#134](https://github.com/yldm-tech/nodra/issues/134)) ([92416e3](https://github.com/yldm-tech/nodra/commit/92416e3f1329137296264056000380f17e283b7a))
+
+
+### Bug Fixes
+
+* **core:** bound Combine's re-reads while writers never pause ([#133](https://github.com/yldm-tech/nodra/issues/133)) ([1c6d329](https://github.com/yldm-tech/nodra/commit/1c6d329171aa358b04061a60a8604139d49743f8))
+
 ## [1.5.0](https://github.com/yldm-tech/nodra/compare/v1.4.0...v1.5.0) (2026-11-14)
 
 
