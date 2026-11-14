@@ -1,11 +1,12 @@
 import type { Ref } from 'react';
+import type { LangIndex } from '../lib/lang';
 import type { Copy } from './copy';
 import { type HowCursor, STEP_MS, howView } from './how';
 import { Dashes, Packet, WindowDots, kicker } from './ui';
 
 interface Props {
 	t: Copy;
-	li: 0 | 1;
+	li: LangIndex;
 	cursor: HowCursor;
 	playing: boolean;
 	zoom: number;

@@ -1,5 +1,4 @@
-import type { Lang } from '../lib/lang';
-import { localeFor } from '../lib/i18n';
+import { type Lang, langIndex, type Tr } from '../lib/lang';
 
 export type Mood = 'idle' | 'focus' | 'happy' | 'sad';
 
@@ -17,6 +16,7 @@ const lidDown = 'absolute h-[9px] w-[15px] rounded-b-[10px] border-3 border-t-0 
 const smile = 'absolute top-[86px] h-1.5 w-[9px] rounded-b-md border-[2.5px] border-t-0 border-dra-ink';
 const blush = 'absolute top-[88px] h-[9px] w-4 rounded-full bg-[rgba(255,140,130,0.6)]';
 const tear = 'absolute rounded-[50%_50%_50%_50%/60%_60%_40%_40%] bg-dra-tear';
+const OOPS: Tr = ['哎呀…', 'oops…', 'おっと…', '앗…', 'ups…', 'oups…'];
 
 // Dra, the Nodra mascot: a 160x150 figure whose face and version tag follow the store's mood.
 export function Mascot({ mood = 'idle', ver = '0042', lang = 'zh' }: { mood?: Mood; ver?: string; lang?: Lang }) {
@@ -92,7 +92,7 @@ export function Mascot({ mood = 'idle', ver = '0042', lang = 'zh' }: { mood?: Mo
 
 			{(happy || sad) && (
 				<div key={`bubble-${mood}`} className={`absolute top-1.5 left-28 animate-dra-pop rounded-full px-[9px] py-1 text-[11px] font-bold whitespace-nowrap text-ink ${happy ? 'bg-lime' : 'bg-coral-soft'}`}>
-					{happy ? '+1 ✓' : localeFor(lang).html === 'zh-CN' ? '哎呀…' : 'oops…'}
+					{happy ? '+1 ✓' : OOPS[langIndex(lang)]}
 				</div>
 			)}
 		</div>
