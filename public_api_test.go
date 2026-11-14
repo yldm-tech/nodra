@@ -3,6 +3,7 @@ package nodra_test
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"testing/synctest"
@@ -124,6 +125,39 @@ func TestRootPersistenceAndAsyncActionContracts(t *testing.T) {
 	}
 	if err := action.Close(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestRootAESGCMCodecAssociatedDataRejectsSwappedFile shares one key between two stores and checks that, with each store's stable logical name as AssociatedData, a file copied from one store over the other fails to load instead of becoming its state.
+func TestRootAESGCMCodecAssociatedDataRejectsSwappedFile(t *testing.T) {
+	ctx := context.Background()
+	keys, err := nodra.NewMemoryKeyProvider("v1", []byte("01234567890123456789012345678901"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	settingsPath, sessionPath := filepath.Join(dir, "settings.enc"), filepath.Join(dir, "session.enc")
+	settings := nodra.New("settings")
+	defer func() { _ = settings.Close() }()
+	session := nodra.New("session")
+	defer func() { _ = session.Close() }()
+	settingsCodec := nodra.AESGCMCodec[string]{Inner: nodra.JSONCodec[string]{}, Keys: keys, AssociatedData: "com.example.app/settings"}
+	sessionCodec := nodra.AESGCMCodec[string]{Inner: nodra.JSONCodec[string]{}, Keys: keys, AssociatedData: "com.example.app/session"}
+	if err := nodra.NewPersistence(settings, nodra.FileStorage{Path: settingsPath}, settingsCodec).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := nodra.NewPersistence(session, nodra.FileStorage{Path: sessionPath}, sessionCodec).Load(ctx); err == nil || session.Get() != "session" {
+		t.Fatalf("swapped file: err=%v value=%q, want an error and the session state kept", err, session.Get())
+	}
+	if err := nodra.NewPersistence(session, nodra.FileStorage{Path: settingsPath}, settingsCodec).Load(ctx); err != nil || session.Get() != "settings" {
+		t.Fatalf("matching associated data: err=%v value=%q", err, session.Get())
 	}
 }
 
