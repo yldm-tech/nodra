@@ -23,6 +23,7 @@ jobs:
         run: npm install -g pnpm@12.15.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm check:docs-i18n
       - run: pnpm build
 
   # Publishes main to https://nodra.yldm.ai. Needs the repository secret CLOUDFLARE_API_TOKEN (the "Edit Cloudflare Workers" token template, limited to this account and the yldm.ai zone); without it the job only warns, so CI stays green until the secret exists.

@@ -4,7 +4,7 @@ import { Mascot } from '../components/Mascot';
 import { SiteHeader } from '../components/SiteHeader';
 import { highlightGo } from '../lib/highlight';
 import { INSTALL_CMD, REPO_URL, useLang } from '../lib/lang';
-import { SECTIONS, UI } from './content';
+import { docText, SECTIONS, UI } from './content';
 
 const anchorOf = (sectionId: string, method: string) => `${sectionId}-${method.replace(/[^A-Za-z0-9]+/g, '-')}`;
 const highlighted = Object.fromEntries(SECTIONS.filter((s) => s.code).map((s) => [s.id, highlightGo(s.code!)]));
@@ -12,7 +12,6 @@ const eyebrow = 'font-mono text-[11px] tracking-[0.14em]';
 
 export function DocsPage() {
 	const lang = useLang();
-	const li = lang === 'zh' ? 0 : 1;
 	const t = UI[lang];
 
 	const [query, setQuery] = useState('');
@@ -49,7 +48,7 @@ export function DocsPage() {
 		const q = query.trim().toLowerCase();
 		const groups: { key: string; label: string; items: { id: string; title: string; hits: { name: string; href: string }[] }[] }[] = [];
 		for (const s of SECTIONS) {
-			const title = s.title[li];
+			const title = docText(lang, s.title);
 			const titleHit = !q || title.toLowerCase().includes(q) || s.id.includes(q);
 			const hits = q ? (s.methods ?? []).filter((m) => m[0].toLowerCase().includes(q)).map((m) => ({ name: m[0], href: `#${anchorOf(s.id, m[0])}` })) : [];
 			if (!titleHit && hits.length === 0) continue;
@@ -61,9 +60,9 @@ export function DocsPage() {
 			g.items.push({ id: s.id, title, hits });
 		}
 		return groups;
-	}, [query, li]);
+	}, [query, lang]);
 
-	const activeTitle = (SECTIONS.find((s) => s.id === active) ?? SECTIONS[0]).title[li];
+	const activeTitle = docText(lang, (SECTIONS.find((s) => s.id === active) ?? SECTIONS[0]).title);
 	const closeNav = () => setNavOpen(false);
 	const navVisible = navOpen || query !== '';
 
@@ -141,8 +140,8 @@ export function DocsPage() {
 						<section key={s.id} id={s.id} data-doc-sec={s.id} className='flex flex-col gap-6 border-b border-fg/8 pt-16 pb-10'>
 							<div className='flex flex-col gap-3'>
 								<span className={`${eyebrow} text-lime uppercase`}>{t.groups[s.group]}</span>
-								<h2 className='m-0 text-[clamp(28px,3vw,38px)] leading-[1.1] font-bold tracking-[-0.035em]'>{s.title[li]}</h2>
-								<p className='m-0 text-base leading-[1.8] text-fg-3'>{s.lead[li]}</p>
+								<h2 className='m-0 text-[clamp(28px,3vw,38px)] leading-[1.1] font-bold tracking-[-0.035em]'>{docText(lang, s.title)}</h2>
+								<p className='m-0 text-base leading-[1.8] text-fg-3'>{docText(lang, s.lead)}</p>
 							</div>
 
 							{s.code && (
@@ -171,7 +170,7 @@ export function DocsPage() {
 											<span className='min-w-0 font-mono text-sm font-medium break-words text-fg'>{m[0]}</span>
 											<div className='flex min-w-0 flex-col gap-2'>
 												<code className='max-w-full self-start overflow-x-auto rounded-lg border border-lime/15 bg-lime/7 px-[9px] py-[5px] font-mono text-[12.5px] whitespace-pre text-lime'>{m[1]}</code>
-												<span className='text-[14.5px] leading-[1.7] text-pretty text-fg-3'>{m[2 + li]}</span>
+												<span className='text-[14.5px] leading-[1.7] text-pretty text-fg-3'>{docText(lang, [m[2], m[3]])}</span>
 											</div>
 										</div>
 									))}
@@ -184,7 +183,7 @@ export function DocsPage() {
 									{s.contract.map((c) => (
 										<div key={c[0]} className='grid grid-cols-[18px_minmax(0,1fr)] gap-2.5 text-[15px] leading-[1.75] text-fg-2'>
 											<span className='mt-[11px] size-1.5 rounded-full bg-lime' />
-											<span className='text-pretty'>{c[li]}</span>
+											<span className='text-pretty'>{docText(lang, c)}</span>
 										</div>
 									))}
 								</div>
@@ -193,7 +192,7 @@ export function DocsPage() {
 							{s.concurrency && (
 								<div className='flex flex-col gap-2 rounded-2xl border border-amber/22 bg-amber/6 px-5 py-[18px]'>
 									<span className={`${eyebrow} text-amber`}>⚡ {t.concurrency}</span>
-									<p className='m-0 text-[14.5px] leading-[1.75] text-fg-2'>{s.concurrency[li]}</p>
+									<p className='m-0 text-[14.5px] leading-[1.75] text-fg-2'>{docText(lang, s.concurrency)}</p>
 								</div>
 							)}
 						</section>
